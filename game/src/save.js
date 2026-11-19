@@ -1,6 +1,6 @@
 // Save / load: money, respect, finished missions, garage upgrades, weapon
-// and the best stats, in localStorage. v6 uses a new key so old saves do
-// not load half a garage into the new build.
+// and the best stats, in localStorage. This build uses a v2 key so old
+// saves do not load half a garage into the new build.
 const KEY = 'sunset-bay-save-v2';
 
 export function loadSave() {
@@ -29,6 +29,9 @@ export function writeSave(world) {
   } catch (_) { /* storage may be unavailable in some contexts */ }
 }
 
+// Loading is defensive on purpose: a save only ever fills in fields the
+// game already knows, and only with values of the right type — a corrupt
+// or hand-edited save can never invent a mission or an upgrade.
 export function applySave(world, data) {
   if (!data) return;
   if (typeof data.money === 'number') world.player.money = data.money;

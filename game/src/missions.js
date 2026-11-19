@@ -1,6 +1,7 @@
 // Eight story missions with step-by-step objectives, a beacon column, HUD
-// distance and cash rewards. Steps run through one small machine:
-// goto / timedGoto / hold / destroy / heat / steal — see config.js.
+// distance and cash rewards. Every step is one of six kinds — goto,
+// timedGoto, hold, destroy, heat, steal — and each kind has its own
+// handler below; the update loop just dispatches to the current one.
 // Missions run one at a time, in order, and can be replayed. Each finished
 // mission pays cash and +100 respect toward the next rank.
 import * as THREE from 'three';
@@ -20,7 +21,7 @@ export function createMissions(world) {
   world.scene.add(marker);
 
   const state = {
-    current: 0,            // index into MISSION_DEFS
+    current: 0,
     step: 0,
     active: false,
     done: { courier: false, getaway: false, harbor: false, streetrace: false, taxifare: false, robbery: false, export: false, showdown: false },
@@ -179,6 +180,64 @@ export function createMissions(world) {
       const idx = MISSION_DEFS.findIndex((d) => !this.done[d.id]);
       this.start(idx === -1 ? 0 : idx);
     },
+    // One handler per step kind. Each reads the player position, updates
+    // the HUD line for the step, and advances (or fails) the mission.
+    handleGoto(s, p, def) {
+      const d = Math.hypot(p.x - s.x, p.z - s.z);
+      world.hud.setMission(def.name, s.label, `${Math.round(d)}m to target`);
+      if (d < 7) this.advance();
+    },
+    handleTimedGoto(s, p, def, dt) {
+      this.stepTimer -= dt;
+      const d = Math.hypot(p.x - s.x, p.z - s.z);
+      world.hud.setMission(def.name, s.label, `${Math.round(d)}m — ${Math.ceil(this.stepTimer)}s left`);
+      if (d < 7) this.advance();
+      else if (this.stepTimer <= 0) this.fail('Out of time!');
+    },
+    handleHold(s, p, def, dt) {
+      const d = Math.hypot(p.x - s.x, p.z - s.z);
+      if (d < 10) {
+        if (!this.holdArmed) {
+          this.holdArmed = true;
+          world.addWanted(2, 'Robbery');
+          world.toast('The till is open — the alarm is ringing! Stay in the store!');
+        }
+        this.holdTimer += dt;
+        world.hud.setMission(def.name, this.stepText(), `${Math.ceil(s.seconds - this.holdTimer)}s of ${s.seconds}s`);
+        if (this.holdTimer >= s.seconds) this.advance();
+      } else {
+        this.holdTimer = 0;
+        world.hud.setMission(def.name, s.label, `${Math.round(d)}m — get inside the store`);
+      }
+    },
+    handleDestroy(s, p, def) {
+      const left = this.rivalCars.filter((c) => !c.dead).length;
+      const target = this.targetPos();
+      const d = target ? Math.hypot(p.x - target.x, p.z - target.z) : 0;
+      world.hud.setMission(def.name, this.stepText(), `${left} car${left === 1 ? '' : 's'} left — ${Math.round(d)}m`);
+      if (left === 0) this.advance();
+    },
+    handleSteal(s, p, def) {
+      const target = this.targetPos();
+      const d = target ? Math.hypot(p.x - target.x, p.z - target.z) : 0;
+      world.hud.setMission(def.name, s.label, `${Math.round(d)}m — press E by the gold coupe`);
+      if (this.exportCar && this.exportCar.dead) this.fail('The coupe was wrecked!');
+    },
+    handleHeat(s, p, def, dt) {
+      if (!this.getawayPeaked) {
+        world.hud.setMission(def.name, this.stepText(), `Heat: ${world.police.wanted} ★ — need 3 ★`);
+        if (world.police.wanted >= 3) {
+          this.getawayPeaked = true;
+          this.getawayTimer = CFG.getawayTimeLimit;
+          world.toast('3 ★ heat! Now lose them!');
+        }
+      } else {
+        this.getawayTimer -= dt;
+        world.hud.setMission(def.name, this.stepText(), `Heat: ${world.police.wanted} ★ — ${Math.ceil(this.getawayTimer)}s left`);
+        if (world.police.wanted === 0) this.complete();
+        else if (this.getawayTimer <= 0) this.fail('Getaway failed — the cops kept you.');
+      }
+    },
     update(dt) {
       if (!this.active) { this.refreshBeacon(); return; }
       const def = this.def();
@@ -186,58 +245,12 @@ export function createMissions(world) {
       if (!s) return;
       const p = this.playerPos();
       this.refreshBeacon();
-      const distTo = (t) => Math.hypot(p.x - t.x, p.z - t.z);
-      if (s.type === 'goto') {
-        const d = distTo(s);
-        world.hud.setMission(def.name, s.label, `${Math.round(d)}m to target`);
-        if (d < 7) this.advance();
-      } else if (s.type === 'timedGoto') {
-        this.stepTimer -= dt;
-        const d = distTo(s);
-        world.hud.setMission(def.name, s.label, `${Math.round(d)}m — ${Math.ceil(this.stepTimer)}s left`);
-        if (d < 7) this.advance();
-        else if (this.stepTimer <= 0) this.fail('Out of time!');
-      } else if (s.type === 'hold') {
-        const d = distTo(s);
-        if (d < 10) {
-          if (!this.holdArmed) {
-            this.holdArmed = true;
-            world.addWanted(2, 'Robbery');
-            world.toast('The till is open — the alarm is ringing! Stay in the store!');
-          }
-          this.holdTimer += dt;
-          world.hud.setMission(def.name, this.stepText(), `${Math.ceil(s.seconds - this.holdTimer)}s of ${s.seconds}s`);
-          if (this.holdTimer >= s.seconds) this.advance();
-        } else {
-          this.holdTimer = 0;
-          world.hud.setMission(def.name, s.label, `${Math.round(d)}m — get inside the store`);
-        }
-      } else if (s.type === 'destroy') {
-        const left = this.rivalCars.filter((c) => !c.dead).length;
-        const target = this.targetPos();
-        const d = target ? distTo(target) : 0;
-        world.hud.setMission(def.name, this.stepText(), `${left} car${left === 1 ? '' : 's'} left — ${Math.round(d)}m`);
-        if (left === 0) this.advance();
-      } else if (s.type === 'steal') {
-        const target = this.targetPos();
-        const d = target ? distTo(target) : 0;
-        world.hud.setMission(def.name, s.label, `${Math.round(d)}m — press E by the gold coupe`);
-        if (this.exportCar && this.exportCar.dead) this.fail('The coupe was wrecked!');
-      } else if (s.type === 'heat') {
-        if (!this.getawayPeaked) {
-          world.hud.setMission(def.name, this.stepText(), `Heat: ${world.police.wanted} ★ — need 3 ★`);
-          if (world.police.wanted >= 3) {
-            this.getawayPeaked = true;
-            this.getawayTimer = CFG.getawayTimeLimit;
-            world.toast('3 ★ heat! Now lose them!');
-          }
-        } else {
-          this.getawayTimer -= dt;
-          world.hud.setMission(def.name, this.stepText(), `Heat: ${world.police.wanted} ★ — ${Math.ceil(this.getawayTimer)}s left`);
-          if (world.police.wanted === 0) this.complete();
-          else if (this.getawayTimer <= 0) this.fail('Getaway failed — the cops kept you.');
-        }
-      }
+      if (s.type === 'goto') this.handleGoto(s, p, def);
+      else if (s.type === 'timedGoto') this.handleTimedGoto(s, p, def, dt);
+      else if (s.type === 'hold') this.handleHold(s, p, def, dt);
+      else if (s.type === 'destroy') this.handleDestroy(s, p, def);
+      else if (s.type === 'steal') this.handleSteal(s, p, def);
+      else if (s.type === 'heat') this.handleHeat(s, p, def, dt);
     },
   };
   return state;

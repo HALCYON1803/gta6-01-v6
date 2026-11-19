@@ -1,5 +1,6 @@
 // The player on foot: third-person WASD movement, jump, and stealing cars.
-// v6: the player carries garage upgrades, respect and the current weapon.
+// The player also carries the persistent state: garage upgrades, respect
+// and the current weapon live here, not in the save file's shape alone.
 import * as THREE from 'three';
 import { CFG } from './config.js';
 import { resolveCircle } from './city.js';
@@ -23,7 +24,8 @@ export function makePlayerMesh() {
   const legs = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.6, 8), pants);
   legs.position.y = 0.34;
   g.add(legs);
-  // A little pistol in the right hand, visible when aiming.
+  // A little pistol in the right hand, visible when aiming. Combat reads
+  // it back through userData.gun to place the muzzle flash and the ray.
   const gun = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.42), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
   gun.position.set(0.42, 1.15, 0.3);
   g.add(gun);
@@ -49,51 +51,6 @@ export function createPlayer(world) {
     walkBob: 0,
     stepTimer: 0,
   };
-}
-
-export function updatePlayerOnFoot(world, dt, camYaw) {
-  const p = world.player;
-  const input = world.input;
-  const fwd = (input.pressed('KeyW') || input.pressed('ArrowUp') ? 1 : 0) - (input.pressed('KeyS') || input.pressed('ArrowDown') ? 1 : 0);
-  const strafe = (input.pressed('KeyD') || input.pressed('ArrowRight') ? 1 : 0) - (input.pressed('KeyA') || input.pressed('ArrowLeft') ? 1 : 0);
-  const sprint = input.pressed('ShiftLeft') || input.pressed('ShiftRight');
-  const speed = sprint ? CFG.playerRunSpeed : CFG.playerWalkSpeed;
-  const mx = Math.sin(camYaw) * fwd + Math.cos(camYaw) * strafe;
-  const mz = Math.cos(camYaw) * fwd - Math.sin(camYaw) * strafe;
-  const len = Math.hypot(mx, mz);
-  if (len > 0.01) {
-    p.pos.x += (mx / len) * speed * dt;
-    p.pos.z += (mz / len) * speed * dt;
-    p.heading = Math.atan2(mx, mz);
-    p.walkBob += dt * (sprint ? 13 : 9);
-    p.mesh.position.y = Math.abs(Math.sin(p.walkBob)) * 0.07;
-    p.mesh.rotation.z = Math.sin(p.walkBob) * 0.05;
-  } else {
-    p.mesh.position.y = 0;
-    p.mesh.rotation.z = 0;
-  }
-  p.mesh.rotation.y = p.heading;
-  // Jump + gravity.
-  if (input.pressed('Space') && p.grounded) {
-    p.velY = CFG.playerJump;
-    p.grounded = false;
-  }
-  if (!p.grounded) {
-    p.velY -= CFG.gravity * dt;
-    p.pos.y += p.velY * dt;
-    if (p.pos.y <= 0) { p.pos.y = 0; p.velY = 0; p.grounded = true; }
-  }
-  p.pos.x = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, p.pos.x));
-  p.pos.z = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, p.pos.z));
-  resolveCircle(world.city.colliders, p.pos, 0.55);
-  // Run into a pedestrian hard enough and they go down (a crime!).
-  for (const ped of world.peds) {
-    if (!ped.alive || ped.down) continue;
-    const d = Math.hypot(ped.pos.x - p.pos.x, ped.pos.z - p.pos.z);
-    if (d < 0.9 && len > 0.01 && speed > 9) {
-      world.knockPed(ped);
-    }
-  }
 }
 
 // Find the nearest stealable car within reach of the player.
@@ -139,4 +96,60 @@ export function exitCar(world) {
   const side = car.heading + Math.PI / 2;
   p.pos.set(car.mesh.position.x + Math.sin(side) * 2.2, 0, car.mesh.position.z + Math.cos(side) * 2.2);
   world.audio.stopEngine();
+}
+
+// WASD relative to the camera yaw, Shift to sprint, Space to jump.
+// Movement is clamped to the map and pushed out of building colliders;
+// sprinting into a pedestrian hard enough knocks them down (a crime!).
+export function updatePlayerOnFoot(world, dt, camYaw) {
+  const p = world.player;
+  const input = world.input;
+  const fwd = (input.pressed('KeyW') || input.pressed('ArrowUp') ? 1 : 0) - (input.pressed('KeyS') || input.pressed('ArrowDown') ? 1 : 0);
+  const strafe = (input.pressed('KeyD') || input.pressed('ArrowRight') ? 1 : 0) - (input.pressed('KeyA') || input.pressed('ArrowLeft') ? 1 : 0);
+  const sprint = input.pressed('ShiftLeft') || input.pressed('ShiftRight');
+  const speed = sprint ? CFG.playerRunSpeed : CFG.playerWalkSpeed;
+  const mx = Math.sin(camYaw) * fwd + Math.cos(camYaw) * strafe;
+  const mz = Math.cos(camYaw) * fwd - Math.sin(camYaw) * strafe;
+  const len = Math.hypot(mx, mz);
+  if (len > 0.01) {
+    p.pos.x += (mx / len) * speed * dt;
+    p.pos.z += (mz / len) * speed * dt;
+    p.heading = Math.atan2(mx, mz);
+    p.walkBob += dt * (sprint ? 13 : 9);
+    p.mesh.position.y = Math.abs(Math.sin(p.walkBob)) * 0.07;
+    p.mesh.rotation.z = Math.sin(p.walkBob) * 0.05;
+  } else {
+    p.mesh.position.y = 0;
+    p.mesh.rotation.z = 0;
+  }
+  p.mesh.rotation.y = p.heading;
+  stepJump(p, input, dt);
+  p.pos.x = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, p.pos.x));
+  p.pos.z = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, p.pos.z));
+  resolveCircle(world.city.colliders, p.pos, 0.55);
+  checkPedBumps(world, p, len, speed);
+}
+
+// Jump on Space, then gravity until the feet touch the ground again.
+function stepJump(p, input, dt) {
+  if (input.pressed('Space') && p.grounded) {
+    p.velY = CFG.playerJump;
+    p.grounded = false;
+  }
+  if (!p.grounded) {
+    p.velY -= CFG.gravity * dt;
+    p.pos.y += p.velY * dt;
+    if (p.pos.y <= 0) { p.pos.y = 0; p.velY = 0; p.grounded = true; }
+  }
+}
+
+// Run into a pedestrian hard enough and they go down.
+function checkPedBumps(world, p, moveLen, speed) {
+  for (const ped of world.peds) {
+    if (!ped.alive || ped.down) continue;
+    const d = Math.hypot(ped.pos.x - p.pos.x, ped.pos.z - p.pos.z);
+    if (d < 0.9 && moveLen > 0.01 && speed > 9) {
+      world.knockPed(ped);
+    }
+  }
 }

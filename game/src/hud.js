@@ -3,6 +3,13 @@
 // cars, cops, the helicopter, roadblocks, the garage and the objective.
 import { CFG, PLACES, respectTitle } from './config.js';
 
+// Green while healthy, amber when hurt, red when nearly down.
+function healthGradient(hp) {
+  if (hp > 50) return 'linear-gradient(90deg,#37d67a,#7cf2a8)';
+  if (hp > 25) return 'linear-gradient(90deg,#e8a33a,#ffd94a)';
+  return 'linear-gradient(90deg,#d63a3a,#ff7a7a)';
+}
+
 export function createHud(world) {
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -14,12 +21,14 @@ export function createHud(world) {
     menu: $('menu'), menuCard: $('menu-card'),
   };
   let toastTimer = null;
+
   const api = {
     showHud() { els.hud.classList.remove('hidden'); },
     hideHud() { els.hud.classList.add('hidden'); },
     setHealth(hp) {
-      els.healthBar.style.width = `${Math.max(0, Math.min(100, hp))}%`;
-      els.healthBar.style.background = hp > 50 ? 'linear-gradient(90deg,#37d67a,#7cf2a8)' : hp > 25 ? 'linear-gradient(90deg,#e8a33a,#ffd94a)' : 'linear-gradient(90deg,#d63a3a,#ff7a7a)';
+      const clamped = Math.max(0, Math.min(100, hp));
+      els.healthBar.style.width = `${clamped}%`;
+      els.healthBar.style.background = healthGradient(hp);
       els.vignette.style.opacity = hp < 35 ? String((35 - hp) / 35 * 0.9) : '0';
     },
     setMoney(m) { els.money.textContent = String(m); },
@@ -47,29 +56,34 @@ export function createHud(world) {
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => { els.toast.style.opacity = '0'; }, 3200);
     },
-    setSpeed(kmh, driving, nosMeter, nosBurning) {
-      if (driving) {
-        els.speedo.classList.remove('hidden');
-        els.speedo.firstChild.textContent = String(Math.round(kmh));
-        if (typeof nosMeter === 'number') {
-          els.nosWrap.classList.remove('hidden');
-          els.nosBar.style.width = `${Math.max(0, Math.min(100, nosMeter))}%`;
-          els.nosBar.style.background = nosBurning ? '#37e6ff' : '#2e6fd8';
-        } else {
-          els.nosWrap.classList.add('hidden');
-        }
+    setHint(text) {
+      if (text) {
+        els.hint.textContent = text;
+        els.hint.classList.remove('hidden');
       } else {
+        els.hint.classList.add('hidden');
+      }
+    },
+    setSpeed(kmh, driving, nosMeter, nosBurning) {
+      if (!driving) {
         els.speedo.classList.add('hidden');
+        els.nosWrap.classList.add('hidden');
+        return;
+      }
+      els.speedo.classList.remove('hidden');
+      els.speedo.firstChild.textContent = String(Math.round(kmh));
+      if (typeof nosMeter === 'number') {
+        els.nosWrap.classList.remove('hidden');
+        els.nosBar.style.width = `${Math.max(0, Math.min(100, nosMeter))}%`;
+        els.nosBar.style.background = nosBurning ? '#37e6ff' : '#2e6fd8';
+      } else {
         els.nosWrap.classList.add('hidden');
       }
     },
-    setHint(text) {
-      if (text) { els.hint.textContent = text; els.hint.classList.remove('hidden'); }
-      else els.hint.classList.add('hidden');
-    },
     drawMinimap() {
       const ctx = els.minimap.getContext('2d');
-      const W = els.minimap.width, H = els.minimap.height;
+      const W = els.minimap.width;
+      const H = els.minimap.height;
       const range = CFG.minimapRange;
       const p = world.player.inCar ? world.player.inCar.mesh.position : world.player.pos;
       const scale = W / (range * 2);

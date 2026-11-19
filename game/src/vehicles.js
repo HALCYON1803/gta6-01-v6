@@ -1,5 +1,5 @@
 // Cars: box-built bodies with cylinder wheels, arcade driving, damage and smoke.
-// v6: engine upgrades raise the top speed, NOS burns a boost meter on Shift,
+// Engine upgrades raise the top speed, NOS burns a boost meter on Shift,
 // armor cuts damage to the player's car. The gold coupe is the export target.
 import * as THREE from 'three';
 import { CFG } from './config.js';
@@ -8,18 +8,21 @@ import { collideCircle } from './city.js';
 
 const PAINTS = [0xd23b3b, 0x2e6fd8, 0xe8c33a, 0x3aa655, 0xe8e8e8, 0x222222, 0xd86a1e, 0x7a4fd0, 0x4fc3d0];
 
+// A box part placed at (x, y, z) on a group, with an optional shadow.
+function boxPart(group, w, h, d, mat, x, y, z, shadow) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(x, y, z);
+  if (shadow) m.castShadow = true;
+  group.add(m);
+  return m;
+}
+
 export function makeCarMesh(color, isPolice) {
   const g = new THREE.Group();
   const paint = new THREE.MeshLambertMaterial({ color: isPolice ? 0x1c2f4a : color });
   const glass = new THREE.MeshLambertMaterial({ color: 0x18242e });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.62, 4.4), paint);
-  body.position.y = 0.55;
-  body.castShadow = true;
-  g.add(body);
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.55, 2.2), glass);
-  cabin.position.set(0, 1.1, -0.2);
-  cabin.castShadow = true;
-  g.add(cabin);
+  boxPart(g, 2.0, 0.62, 4.4, paint, 0, 0.55, 0, true);
+  boxPart(g, 1.8, 0.55, 2.2, glass, 0, 1.1, -0.2, true);
   const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 12);
   const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
   const wheels = [];
@@ -31,12 +34,8 @@ export function makeCarMesh(color, isPolice) {
     wheels.push(w);
   }
   if (isPolice) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.02, 0.2, 4.42), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    stripe.position.y = 0.62;
-    g.add(stripe);
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.16, 0.5), new THREE.MeshLambertMaterial({ color: 0xff2222 }));
-    bar.position.set(0, 1.45, -0.2);
-    g.add(bar);
+    boxPart(g, 2.02, 0.2, 4.42, new THREE.MeshLambertMaterial({ color: 0xffffff }), 0, 0.62, 0, false);
+    const bar = boxPart(g, 1.2, 0.16, 0.5, new THREE.MeshLambertMaterial({ color: 0xff2222 }), 0, 1.45, -0.2, false);
     g.userData.lightBar = bar;
   }
   const head = new THREE.PointLight(0xfff2c0, 0, 18);
@@ -68,7 +67,7 @@ export function createCar(world, opts) {
     smokeTimer: 0,
     dead: false,
     parked: opts.parked !== false,
-    driver: opts.driver || null,   // 'player' | 'ai' | 'police' | null
+    driver: opts.driver || null,
     steer: 0,
     color: opts.color || 0,
     nosMeter: 100,
@@ -76,6 +75,18 @@ export function createCar(world, opts) {
   };
   world.cars.push(car);
   return car;
+}
+
+// A drifting smoke puff, used for both damage smoke and explosion smoke.
+function addSmoke(world, pos, y, radius, opacity, life) {
+  const puff = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0x555555, transparent: true, opacity })
+  );
+  puff.position.copy(pos);
+  puff.position.y = y;
+  world.scene.add(puff);
+  world.effects.push({ mesh: puff, life, kind: 'smoke' });
 }
 
 export function explodeCar(world, car) {
@@ -87,16 +98,19 @@ export function explodeCar(world, car) {
     new THREE.SphereGeometry(3.2, 12, 10),
     new THREE.MeshBasicMaterial({ color: 0xff7722, transparent: true, opacity: 0.95 })
   );
-  fire.position.copy(pos).y = 1.2;
+  fire.position.copy(pos);
+  fire.position.y = 1.2;
   world.scene.add(fire);
   world.effects.push({ mesh: fire, life: 0.7, kind: 'fireball' });
   const smoke = new THREE.Mesh(
     new THREE.SphereGeometry(2.4, 10, 8),
     new THREE.MeshBasicMaterial({ color: 0x333333, transparent: true, opacity: 0.7 })
   );
-  smoke.position.copy(pos).y = 2.5;
+  smoke.position.copy(pos);
+  smoke.position.y = 2.5;
   world.scene.add(smoke);
   world.effects.push({ mesh: smoke, life: 1.6, kind: 'smoke' });
+  // Blast damage falls off linearly with distance from the blast.
   const hurt = (targetPos) => {
     const d = Math.hypot(targetPos.x - pos.x, targetPos.z - pos.z);
     if (d < CFG.carExplosionRadius) return CFG.carExplosionDamage * (1 - d / CFG.carExplosionRadius);
@@ -128,13 +142,7 @@ export function damageCar(world, car, amount) {
   car.health -= amount;
   if (car.health <= 35 && car.smokeTimer <= 0) {
     car.smokeTimer = 0.4;
-    const puff = new THREE.Mesh(
-      new THREE.SphereGeometry(1.1, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0x555555, transparent: true, opacity: 0.55 })
-    );
-    puff.position.copy(car.mesh.position).y = 1.6;
-    world.scene.add(puff);
-    world.effects.push({ mesh: puff, life: 1.1, kind: 'smoke' });
+    addSmoke(world, car.mesh.position, 1.6, 1.1, 0.55, 1.1);
   }
   if (car.health <= 0) explodeCar(world, car);
 }

@@ -21,7 +21,8 @@ const PATTERNS = {
   },
 };
 
-function noteFreq(root, scale, degree, octave) {
+// Frequency of a scale degree above a root note, at an octave multiplier.
+function degreeFreq(root, scale, degree, octave) {
   const semis = scale[((degree % scale.length) + scale.length) % scale.length] + 12 * Math.floor(degree / scale.length);
   return root * Math.pow(2, semis / 12) * octave;
 }
@@ -31,7 +32,6 @@ export function createRadio(world) {
   let timer = null;
   let step = 0;
   let nextTime = 0;
-  let gainNode = null;
 
   function station() { return RADIO_STATIONS[stationIndex]; }
 
@@ -46,10 +46,13 @@ export function createRadio(world) {
     g.gain.setValueAtTime(0.0001, at);
     g.gain.exponentialRampToValueAtTime(vol, at + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-    o.connect(g); g.connect(master);
-    o.start(at); o.stop(at + dur + 0.05);
+    o.connect(g);
+    g.connect(master);
+    o.start(at);
+    o.stop(at + dur + 0.05);
   }
 
+  // Schedule every step that falls inside the next quarter-second window.
   function scheduler() {
     const ctx = world.audio.context();
     if (!ctx) return;
@@ -60,8 +63,8 @@ export function createRadio(world) {
       const pat = PATTERNS[st.id];
       const bassDeg = pat.bass[step % 16];
       const leadDeg = pat.lead[step % 16];
-      if (bassDeg >= 0) playNote(noteFreq(st.root, scale, bassDeg, 0.5), nextTime, stepDur * 1.8, 'triangle', 0.16);
-      if (leadDeg >= 0) playNote(noteFreq(st.root, scale, leadDeg, 2), nextTime, stepDur * 0.9, 'square', 0.045);
+      if (bassDeg >= 0) playNote(degreeFreq(st.root, scale, bassDeg, 0.5), nextTime, stepDur * 1.8, 'triangle', 0.16);
+      if (leadDeg >= 0) playNote(degreeFreq(st.root, scale, leadDeg, 2), nextTime, stepDur * 0.9, 'square', 0.045);
       if (step % 4 === 0) playNote(1800, nextTime, 0.03, 'sine', 0.02); // ticking hat
       nextTime += stepDur;
       step += 1;
@@ -82,7 +85,10 @@ export function createRadio(world) {
       world.hud.setRadio(this.label());
     },
     stop() {
-      if (timer) { clearInterval(timer); timer = null; }
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
       world.hud.setRadio('Radio off — press Q');
     },
     next() {
@@ -96,8 +102,14 @@ export function createRadio(world) {
       world.audio.blip();
     },
     setMuted(m) {
-      if (m) { if (timer) { clearInterval(timer); timer = null; } }
-      else if (!timer) this.start();
+      if (m) {
+        if (timer) {
+          clearInterval(timer);
+          timer = null;
+        }
+      } else if (!timer) {
+        this.start();
+      }
     },
   };
   return api;

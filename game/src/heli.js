@@ -2,30 +2,32 @@
 // hovers above the player with a sweeping searchlight, and never loses
 // sight of you: while it is overhead your wanted level cannot cool off.
 // It leaves (climbing away) once the heat is gone.
+//
+// The helicopter is a visual + rules object, not a car: it never
+// collides, never takes damage, and its only job is to pin the wanted
+// level while it circles. Shooting it down is not part of this build.
 import * as THREE from 'three';
 import { CFG } from './config.js';
 
 export function createHeli(world) {
   const g = new THREE.Group();
-  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1c2f4a });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 4.6), bodyMat);
-  body.position.y = 0;
-  g.add(body);
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 4.2), bodyMat);
-  tail.position.set(0, 0.2, -4.0);
-  g.add(tail);
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.9, 1.4), new THREE.MeshLambertMaterial({ color: 0x9fd8ff }));
-  glass.position.set(0, 0.35, 1.8);
-  g.add(glass);
-  const rotor = new THREE.Mesh(new THREE.BoxGeometry(9.5, 0.08, 0.5), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-  rotor.position.y = 1.0;
-  g.add(rotor);
-  const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.0, 0.4), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-  tailRotor.position.set(0.45, 0.3, -5.8);
-  g.add(tailRotor);
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.24, 0.3, 4.62), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-  stripe.position.y = -0.1;
-  g.add(stripe);
+  const navy = new THREE.MeshLambertMaterial({ color: 0x1c2f4a });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x222222 });
+
+  // Small helper: a box part placed at (x, y, z) on the group.
+  function part(w, h, d, mat, x, y, z) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    g.add(m);
+    return m;
+  }
+  part(2.2, 1.4, 4.6, navy, 0, 0, 0);            // body
+  part(0.7, 0.7, 4.2, navy, 0, 0.2, -4.0);       // tail boom
+  part(1.9, 0.9, 1.4, new THREE.MeshLambertMaterial({ color: 0x9fd8ff }), 0, 0.35, 1.8); // glass
+  part(2.24, 0.3, 4.62, new THREE.MeshLambertMaterial({ color: 0xffffff }), 0, -0.1, 0); // stripe
+  const rotor = part(9.5, 0.08, 0.5, dark, 0, 1.0, 0);
+  const tailRotor = part(0.08, 2.0, 0.4, dark, 0.45, 0.3, -5.8);
+
   // Searchlight: a cone of light the player can see sweeping the street.
   const beam = new THREE.Mesh(
     new THREE.ConeGeometry(3.2, 26, 12, 1, true),
@@ -39,6 +41,10 @@ export function createHeli(world) {
   g.visible = false;
   world.scene.add(g);
 
+  function playerPos() {
+    return world.player.inCar ? world.player.inCar.mesh.position : world.player.pos;
+  }
+
   const state = {
     mesh: g,
     rotor,
@@ -50,13 +56,19 @@ export function createHeli(world) {
     // screenshot preset moves it ahead of the player so it is in frame.
     follow: { x: 10, z: -8 },
     announceTimer: 0,
+    reset() {
+      this.active = false;
+      this.leaving = false;
+      g.visible = false;
+      g.position.y = this.hoverH;
+    },
     update(dt) {
       const wanted = world.police.wanted;
       if (!this.active && wanted >= CFG.heliWanted && world.state === 'play') {
         this.active = true;
         this.leaving = false;
         g.visible = true;
-        const p = world.player.inCar ? world.player.inCar.mesh.position : world.player.pos;
+        const p = playerPos();
         g.position.set(p.x + 14, this.hoverH, p.z - 10);
         world.toast('Air One overhead — the helicopter has your scent!');
         world.audio.horn();
@@ -64,7 +76,7 @@ export function createHeli(world) {
       if (!this.active) return;
       rotor.rotation.y += dt * 22;
       tailRotor.rotation.x += dt * 30;
-      const p = world.player.inCar ? world.player.inCar.mesh.position : world.player.pos;
+      const p = playerPos();
       if (wanted === 0 || this.leaving) {
         // Climb away and disappear.
         this.leaving = true;
@@ -78,11 +90,13 @@ export function createHeli(world) {
         return;
       }
       // Hover above and slightly behind the player, spotlight on them.
-      const tx = p.x + this.follow.x, tz = p.z + this.follow.z;
+      const tx = p.x + this.follow.x;
+      const tz = p.z + this.follow.z;
       g.position.x += (tx - g.position.x) * Math.min(1, dt * 1.1);
       g.position.z += (tz - g.position.z) * Math.min(1, dt * 1.1);
       g.position.y += (this.hoverH + Math.sin(performance.now() / 900) * 1.2 - g.position.y) * Math.min(1, dt * 2);
-      const dx = p.x - g.position.x, dz = p.z - g.position.z;
+      const dx = p.x - g.position.x;
+      const dz = p.z - g.position.z;
       g.rotation.y = Math.atan2(dx, dz);
       // Sweep the beam in a slow circle around the player.
       const t = performance.now() / 1600;
@@ -92,15 +106,9 @@ export function createHeli(world) {
       beam.rotation.x = -Math.cos(t) * 0.12;
       this.announceTimer -= dt;
     },
-    reset() {
-      this.active = false;
-      this.leaving = false;
-      g.visible = false;
-      g.position.y = this.hoverH;
-    },
   };
   return state;
 }
-// Note: the helicopter is a visual + rules object, not a car: it never
-// collides, never takes damage, and its only job is to pin the wanted
-// level while it circles. Shooting it down is not part of this build.
+
+// Note: `announceTimer` is kept for future taunt lines from the crew;
+// the helicopter's behaviour today does not depend on it.

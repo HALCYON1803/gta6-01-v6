@@ -1,7 +1,8 @@
 // Sunset Bay city: ground, streets, sidewalks, towers, palms, beach and sea.
-// Returns the colliders (building AABBs) and the street network for traffic.
-// v6 adds the Sunset Garage, the Corner Store and the gun shop as real,
-// collidable places, plus neon signs on the downtown towers.
+// buildCity returns the building colliders (AABBs) and the street network
+// the traffic and the minimap read. v6 adds the Sunset Garage, the Corner
+// Store and the gun shop as real, collidable places, plus neon signs on
+// the downtown towers and lit windows on their faces.
 import * as THREE from 'three';
 import { CFG, STREET_COORDS, PLACES } from './config.js';
 import { makeRng, range, pick } from './random.js';
@@ -9,37 +10,33 @@ import { makeRng, range, pick } from './random.js';
 const TOWER_COLORS = [0x8a7f8d, 0x6f7f95, 0x9a8a6f, 0x7a6a8a, 0x5f7a8a, 0xb09a7a];
 const NEON_COLORS = [0xff4fd8, 0x37e6ff, 0xffd94a, 0x7cff5e, 0xff7a3c];
 
+// A flat plane lying on the ground, for land / beach / sea / roads.
+function groundPlane(w, d, color, x, y, z) {
+  const m = new THREE.Mesh(
+    new THREE.PlaneGeometry(w, d),
+    new THREE.MeshLambertMaterial({ color })
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.set(x, y, z);
+  return m;
+}
+
 export function buildCity(scene) {
   const rng = makeRng(20261119);
   const colliders = [];
   const half = CFG.worldHalf;
 
   // Land, beach strip and sea to the east.
-  const land = new THREE.Mesh(
-    new THREE.PlaneGeometry(half * 2 + 60, half * 2 + 60),
-    new THREE.MeshLambertMaterial({ color: 0x5a6a55 })
-  );
-  land.rotation.x = -Math.PI / 2;
-  land.position.set(0, -0.05, 0);
+  const land = groundPlane(half * 2 + 60, half * 2 + 60, 0x5a6a55, 0, -0.05, 0);
   land.receiveShadow = true;
   scene.add(land);
-  const beach = new THREE.Mesh(
-    new THREE.PlaneGeometry(46, half * 2 + 60),
-    new THREE.MeshLambertMaterial({ color: 0xd9c08a })
-  );
-  beach.rotation.x = -Math.PI / 2;
-  beach.position.set(half + 23, -0.02, 0);
+  const beach = groundPlane(46, half * 2 + 60, 0xd9c08a, half + 23, -0.02, 0);
   beach.receiveShadow = true;
   scene.add(beach);
-  const sea = new THREE.Mesh(
-    new THREE.PlaneGeometry(220, half * 2 + 400),
-    new THREE.MeshLambertMaterial({ color: 0x2f7fb8 })
-  );
-  sea.rotation.x = -Math.PI / 2;
-  sea.position.set(half + 156, -0.12, 0);
+  const sea = groundPlane(220, half * 2 + 400, 0x2f7fb8, half + 156, -0.12, 0);
   scene.add(sea);
 
-  // Streets: dark ribbons on the grid, with pale sidewalks beside them.
+  // Streets: dark ribbons on the grid, pale sidewalks beside them.
   const roadMat = new THREE.MeshLambertMaterial({ color: 0x3a3f47 });
   const walkMat = new THREE.MeshLambertMaterial({ color: 0x9a9a92 });
   for (const s of STREET_COORDS) {
@@ -65,53 +62,8 @@ export function buildCity(scene) {
     }
   }
 
-  // One tower per block, skipping the blocks that hold the named places.
-  const placeBlocks = [
-    [PLACES.garage.x, PLACES.garage.z], [PLACES.store.x, PLACES.store.z],
-    [PLACES.gunshop.x, PLACES.gunshop.z], [PLACES.hideout.x, PLACES.hideout.z],
-  ];
-  const blockCenters = [];
-  for (let i = 0; i < STREET_COORDS.length - 1; i++) {
-    for (let j = 0; j < STREET_COORDS.length - 1; j++) {
-      blockCenters.push([(STREET_COORDS[i] + STREET_COORDS[i + 1]) / 2, (STREET_COORDS[j] + STREET_COORDS[j + 1]) / 2]);
-    }
-  }
-  for (const [cx, cz] of blockCenters) {
-    if (placeBlocks.some(([px, pz]) => Math.abs(px - cx) < 31 && Math.abs(pz - cz) < 31)) continue;
-    if (rng() < 0.12) continue; // some blocks stay open plazas / parking
-    const w = range(rng, 16, 30);
-    const d = range(rng, 16, 30);
-    const h = range(rng, 10, 46);
-    const tower = new THREE.Mesh(
-      new THREE.BoxGeometry(w, h, d),
-      new THREE.MeshLambertMaterial({ color: pick(rng, TOWER_COLORS) })
-    );
-    tower.position.set(cx, h / 2, cz);
-    tower.castShadow = true;
-    tower.receiveShadow = true;
-    scene.add(tower);
-    // Rooftop neon sign on the tallest downtown towers.
-    if (h > 30 && rng() < 0.7) {
-      const sign = new THREE.Mesh(
-        new THREE.BoxGeometry(Math.min(14, w * 0.7), 1.6, 0.6),
-        new THREE.MeshBasicMaterial({ color: pick(rng, NEON_COLORS) })
-      );
-      sign.position.set(cx, h + 1.2, cz + d / 2 + 0.4);
-      scene.add(sign);
-    }
-    // Lit windows: a few bright quads on the tower faces.
-    const winMat = new THREE.MeshBasicMaterial({ color: 0xffd94a });
-    const wins = Math.floor(range(rng, 3, 8));
-    for (let k = 0; k < wins; k++) {
-      const win = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.1), winMat);
-      win.position.set(cx - w / 2 + range(rng, 2, w - 2), range(rng, 3, h - 2), cz + d / 2 + 0.06);
-      scene.add(win);
-    }
-    colliders.push({ minX: cx - w / 2 - 0.4, maxX: cx + w / 2 + 0.4, minZ: cz - d / 2 - 0.4, maxZ: cz + d / 2 + 0.4 });
-  }
-
-  // Named places: garage, corner store, gun shop — low buildings with a
-  // colored roof so the player can spot them from the street.
+  // Named places first: garage, corner store, gun shop — low buildings
+  // with a colored roof so the player can spot them from the street.
   function placeBuilding(p, w, d, h, color, roofColor) {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color }));
     b.position.set(p.x, h / 2, p.z);
@@ -131,6 +83,54 @@ export function buildCity(scene) {
   placeBuilding(PLACES.garage, 26, 18, 7, 0x4a5a6a, 0x37e6ff);
   placeBuilding(PLACES.store, 20, 14, 6, 0x8a5a3a, 0xffd94a);
   placeBuilding(PLACES.gunshop, 20, 14, 6, 0x3a4a3a, 0xff4fd8);
+
+  // One tower per block, skipping the blocks that hold the named places.
+  const placeBlocks = [
+    [PLACES.garage.x, PLACES.garage.z], [PLACES.store.x, PLACES.store.z],
+    [PLACES.gunshop.x, PLACES.gunshop.z], [PLACES.hideout.x, PLACES.hideout.z],
+  ];
+  const blockCenters = [];
+  for (let i = 0; i < STREET_COORDS.length - 1; i++) {
+    for (let j = 0; j < STREET_COORDS.length - 1; j++) {
+      blockCenters.push([(STREET_COORDS[i] + STREET_COORDS[i + 1]) / 2, (STREET_COORDS[j] + STREET_COORDS[j + 1]) / 2]);
+    }
+  }
+  // One tower per block, skipping the blocks that hold the named places.
+  // Rooftop neon on the tallest downtown towers, lit windows on the faces.
+  function buildTower(cx, cz, rng) {
+    const w = range(rng, 16, 30);
+    const d = range(rng, 16, 30);
+    const h = range(rng, 10, 46);
+    const tower = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshLambertMaterial({ color: pick(rng, TOWER_COLORS) })
+    );
+    tower.position.set(cx, h / 2, cz);
+    tower.castShadow = true;
+    tower.receiveShadow = true;
+    scene.add(tower);
+    if (h > 30 && rng() < 0.7) {
+      const sign = new THREE.Mesh(
+        new THREE.BoxGeometry(Math.min(14, w * 0.7), 1.6, 0.6),
+        new THREE.MeshBasicMaterial({ color: pick(rng, NEON_COLORS) })
+      );
+      sign.position.set(cx, h + 1.2, cz + d / 2 + 0.4);
+      scene.add(sign);
+    }
+    const winMat = new THREE.MeshBasicMaterial({ color: 0xffd94a });
+    const wins = Math.floor(range(rng, 3, 8));
+    for (let k = 0; k < wins; k++) {
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.1), winMat);
+      win.position.set(cx - w / 2 + range(rng, 2, w - 2), range(rng, 3, h - 2), cz + d / 2 + 0.06);
+      scene.add(win);
+    }
+    colliders.push({ minX: cx - w / 2 - 0.4, maxX: cx + w / 2 + 0.4, minZ: cz - d / 2 - 0.4, maxZ: cz + d / 2 + 0.4 });
+  }
+  for (const [cx, cz] of blockCenters) {
+    if (placeBlocks.some(([px, pz]) => Math.abs(px - cx) < 31 && Math.abs(pz - cz) < 31)) continue;
+    if (rng() < 0.12) continue; // some blocks stay open plazas / parking
+    buildTower(cx, cz, rng);
+  }
 
   // Palm trees along the beach and scattered through the plazas.
   const trunkMat = new THREE.MeshLambertMaterial({ color: 0x7a5a3a });
@@ -157,6 +157,8 @@ export function buildCity(scene) {
   return { colliders, streets: STREET_COORDS.slice() };
 }
 
+// Does a circle at (x, z) with radius r overlap any building? Returns the
+// first collider it touches, or null.
 export function collideCircle(colliders, x, z, r) {
   for (const c of colliders) {
     if (x + r > c.minX && x - r < c.maxX && z + r > c.minZ && z - r < c.maxZ) return c;
@@ -164,6 +166,9 @@ export function collideCircle(colliders, x, z, r) {
   return null;
 }
 
+// Push a circle out of whatever building it overlaps, along the shortest
+// exit side. Used for the player, peds and cars so nobody gets stuck
+// inside a tower.
 export function resolveCircle(colliders, pos, r) {
   const c = collideCircle(colliders, pos.x, pos.z, r);
   if (!c) return;

@@ -11,7 +11,8 @@ function snapCamera(world, targetPos) {
   );
 }
 
-function givePlayerCar(world, x, z, heading, speed) {
+// Hand the player the first free car, placed and aimed for the shot.
+function handPlayerCar(world, x, z, heading, speed) {
   const p = world.player;
   const car = world.cars.find((c) => !c.dead && !c.isPolice && c.driver !== 'player');
   if (!car) return null;
@@ -29,17 +30,24 @@ function givePlayerCar(world, x, z, heading, speed) {
   return car;
 }
 
+function placePlayerOnFoot(world, x, z, heading) {
+  const p = world.player;
+  if (p.inCar) {
+    p.inCar.driver = null;
+    p.inCar.isPlayerCar = false;
+    p.inCar = null;
+    p.mesh.visible = true;
+  }
+  p.pos.set(x, 0, z);
+  p.heading = heading;
+  p.mesh.rotation.y = heading;
+}
+
 export function applyShotPreset(world, name) {
   const p = world.player;
-  const setPlayer = (x, z, heading) => {
-    if (p.inCar) { p.inCar.driver = null; p.inCar.isPlayerCar = false; p.inCar = null; p.mesh.visible = true; }
-    p.pos.set(x, 0, z);
-    p.heading = heading;
-    p.mesh.rotation.y = heading;
-  };
   if (name === 'start') {
     // Title screen over the city: put the camera high over downtown.
-    setPlayer(0, 40, Math.PI);
+    placePlayerOnFoot(world, 0, 40, Math.PI);
     world.camState.yaw = Math.PI * 0.9;
     world.camState.pitch = 0.55;
     world.state = 'title';
@@ -47,7 +55,7 @@ export function applyShotPreset(world, name) {
   }
   if (name === 'street') {
     // Racing toward the first Grand Prix gate, radio on, beacon up.
-    const car = givePlayerCar(world, 60, -60, Math.PI / 4, 16);
+    const car = handPlayerCar(world, 60, -60, Math.PI / 4, 16);
     world.missions.start(3);
     world.radio.next();
     world.camState.yaw = Math.PI / 4;
@@ -57,7 +65,7 @@ export function applyShotPreset(world, name) {
   }
   if (name === 'chase') {
     // 4 stars: cops in pursuit, Air One overhead, roadblock ahead.
-    const car = givePlayerCar(world, 0, 0, 0, 18);
+    const car = handPlayerCar(world, 0, 0, 0, 18);
     world.police.wanted = 4;
     world.police.hiddenTimer = 0;
     world.hud.setStars(4);
@@ -65,8 +73,10 @@ export function applyShotPreset(world, name) {
     const copA = world.police.spawnCop();
     const copB = world.police.spawnCop();
     if (car) {
-      const fwdX = Math.sin(car.heading), fwdZ = Math.cos(car.heading);
-      const rightX = Math.cos(car.heading), rightZ = -Math.sin(car.heading);
+      const fwdX = Math.sin(car.heading);
+      const fwdZ = Math.cos(car.heading);
+      const rightX = Math.cos(car.heading);
+      const rightZ = -Math.sin(car.heading);
       const spots = [
         { ahead: 38, side: -3.5, heading: car.heading + Math.PI },
         { ahead: 22, side: 4, heading: car.heading },
@@ -102,7 +112,7 @@ export function applyShotPreset(world, name) {
     // On foot south of the Corner Store, facing it — the beacon, the player
     // and the storefront all read in one frame (no wall filling the shot).
     // 6 m from the till, inside the hold zone so the robbery counts down.
-    setPlayer(60, 164, 0);
+    placePlayerOnFoot(world, 60, 164, 0);
     world.camState.yaw = 0;
     world.missions.start(5);
     // Jump straight to the hold step so the robbery is visibly underway.

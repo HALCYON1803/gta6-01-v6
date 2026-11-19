@@ -9,6 +9,7 @@ const UPGRADES = [
   { id: 'nos', name: 'NOS Kit', price: CFG.upgradePrices.nos, desc: 'Hold Shift while driving for a boost' },
 ];
 
+// Close enough to the garage door to use the shop, on foot or in a car.
 export function nearGarage(world) {
   const p = world.player.inCar ? world.player.inCar.mesh.position : world.player.pos;
   return Math.hypot(p.x - PLACES.garage.x, p.z - PLACES.garage.z) < 16;
@@ -27,10 +28,10 @@ export function createGarage(world) {
         const owned = world.player.upgrades[u.id];
         const row = document.createElement('div');
         row.className = 'garage-row';
-        const canAfford = world.player.money >= u.price;
+        const afford = world.player.money >= u.price;
         row.innerHTML = `<b>${u.name}</b> — ${u.desc}<br>` +
           (owned ? '<span class="owned">✓ INSTALLED</span>'
-            : `<button ${canAfford ? '' : 'disabled'}>$${u.price} — BUY</button>`);
+            : `<button ${afford ? '' : 'disabled'}>$${u.price} — BUY</button>`);
         const btn = row.querySelector('button');
         if (btn) btn.addEventListener('click', () => this.buy(u.id));
         list.appendChild(row);

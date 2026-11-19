@@ -1,12 +1,19 @@
 // Wanted level and the Sunset Bay PD: patrol cars spawn at the map edge,
 // chase the player, ram the player's car, and run the player down on foot.
-// v6: at 3 stars the PD throws up roadblocks ahead of the player, and at
+// At 3 stars the PD throws up roadblocks ahead of the player, and at
 // 4 stars Air One (the police helicopter, see heli.js) joins the chase.
 import { CFG } from './config.js';
 import { createCar, damageCar } from './vehicles.js';
 
+// Wrap an angle difference into (-PI, PI] so a cop turns the short way.
+function wrapAngle(dh) {
+  while (dh > Math.PI) dh -= Math.PI * 2;
+  while (dh < -Math.PI) dh += Math.PI * 2;
+  return dh;
+}
+
 export function createPolice(world) {
-  return {
+  const api = {
     wanted: 0,
     hiddenTimer: 0,
     spawnTimer: 0,
@@ -48,8 +55,10 @@ export function createPolice(world) {
     spawnRoadblock() {
       const p = world.player.inCar ? world.player.inCar.mesh.position : world.player.pos;
       const heading = world.player.inCar ? world.player.inCar.heading : world.player.heading;
-      const fx = Math.sin(heading), fz = Math.cos(heading);
-      const rx = Math.cos(heading), rz = -Math.sin(heading);
+      const fx = Math.sin(heading);
+      const fz = Math.cos(heading);
+      const rx = Math.cos(heading);
+      const rz = -Math.sin(heading);
       for (const side of [-3.2, 3.2]) {
         const car = createCar(world, {
           x: p.x + fx * 46 + rx * side,
@@ -73,6 +82,45 @@ export function createPolice(world) {
       // A fresh heat should be able to set a new roadblock right away.
       this.roadblockTimer = 0;
     },
+    // One pursuit car, one frame: steer toward the player, close in, and
+    // ram when close enough (with a cooldown so it is not a stunlock).
+    chaseStep(cop, dt) {
+      if (cop.car.dead || cop.giveUp) return;
+      cop.ramCooldown -= dt;
+      const car = cop.car;
+      const p = world.player;
+      const tx = p.inCar ? p.inCar.mesh.position.x : p.pos.x;
+      const tz = p.inCar ? p.inCar.mesh.position.z : p.pos.z;
+      const dx = tx - car.mesh.position.x;
+      const dz = tz - car.mesh.position.z;
+      const dist = Math.hypot(dx, dz);
+      const wantHeading = Math.atan2(dx, dz);
+      const dh = wrapAngle(wantHeading - car.heading);
+      car.heading += Math.max(-2.4 * dt, Math.min(2.4 * dt, dh));
+      const targetSpeed = Math.min(30, 16 + this.wanted * 3);
+      car.speed += (targetSpeed - car.speed) * Math.min(1, dt * 1.4);
+      const nx = car.mesh.position.x + Math.sin(car.heading) * car.speed * dt;
+      const nz = car.mesh.position.z + Math.cos(car.heading) * car.speed * dt;
+      car.mesh.position.x = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, nx));
+      car.mesh.position.z = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, nz));
+      car.mesh.rotation.y = car.heading;
+      for (const w of car.mesh.userData.wheels) w.rotation.x += car.speed * dt * 2.4;
+      if (car.mesh.userData.lightBar) {
+        car.mesh.userData.lightBar.material.color.setHex(Math.floor(performance.now() / 300) % 2 ? 0xff2222 : 0x2244ff);
+      }
+      if (dist < 3.4 && cop.ramCooldown <= 0) {
+        cop.ramCooldown = 1.2;
+        world.audio.crash();
+        if (p.inCar) {
+          damageCar(world, p.inCar, CFG.policeRamDamage);
+          world.damagePlayer(6, 'ram');
+          p.inCar.speed *= 0.5;
+          car.speed *= 0.4;
+        } else {
+          world.damagePlayer(14, 'ram');
+        }
+      }
+    },
     update(dt) {
       // Air One follows the heat level, roadblocks follow it too.
       if (world.heli) world.heli.update(dt);
@@ -91,7 +139,11 @@ export function createPolice(world) {
         this.cops = this.cops.filter((c) => {
           const d = Math.hypot(c.car.mesh.position.x - world.player.pos.x, c.car.mesh.position.z - world.player.pos.z);
           if (d > 260 || c.car.dead) {
-            if (!c.car.dead) { world.scene.remove(c.car.mesh); const i = world.cars.indexOf(c.car); if (i >= 0) world.cars.splice(i, 1); }
+            if (!c.car.dead) {
+              world.scene.remove(c.car.mesh);
+              const i = world.cars.indexOf(c.car);
+              if (i >= 0) world.cars.splice(i, 1);
+            }
             return false;
           }
           return true;
@@ -105,7 +157,7 @@ export function createPolice(world) {
         this.spawnCop();
         this.spawnTimer = 2.5;
       }
-      // Roadblocks at 3+ stars: refresh one ahead of the player every 20s,
+      // Roadblocks at 3+ stars: refresh one ahead of the player every 20 s,
       // and drop it once the player smashes past it.
       this.roadblockTimer -= dt;
       if (this.wanted >= CFG.roadblockWanted && this.roadblockTimer <= 0) {
@@ -132,47 +184,9 @@ export function createPolice(world) {
       } else {
         this.hiddenTimer = 0;
       }
-      for (const cop of this.cops) {
-        if (cop.car.dead || cop.giveUp) continue;
-        cop.ramCooldown -= dt;
-        const car = cop.car;
-        const p = world.player;
-        const tx = p.inCar ? p.inCar.mesh.position.x : p.pos.x;
-        const tz = p.inCar ? p.inCar.mesh.position.z : p.pos.z;
-        const dx = tx - car.mesh.position.x;
-        const dz = tz - car.mesh.position.z;
-        const dist = Math.hypot(dx, dz);
-        const wantHeading = Math.atan2(dx, dz);
-        let dh = wantHeading - car.heading;
-        while (dh > Math.PI) dh -= Math.PI * 2;
-        while (dh < -Math.PI) dh += Math.PI * 2;
-        car.heading += Math.max(-2.4 * dt, Math.min(2.4 * dt, dh));
-        const targetSpeed = Math.min(30, 16 + this.wanted * 3);
-        car.speed += (targetSpeed - car.speed) * Math.min(1, dt * 1.4);
-        const nx = car.mesh.position.x + Math.sin(car.heading) * car.speed * dt;
-        const nz = car.mesh.position.z + Math.cos(car.heading) * car.speed * dt;
-        car.mesh.position.x = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, nx));
-        car.mesh.position.z = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, nz));
-        car.mesh.rotation.y = car.heading;
-        for (const w of car.mesh.userData.wheels) w.rotation.x += car.speed * dt * 2.4;
-        if (car.mesh.userData.lightBar) {
-          car.mesh.userData.lightBar.material.color.setHex(Math.floor(performance.now() / 300) % 2 ? 0xff2222 : 0x2244ff);
-        }
-        // Ram the player's car, or bump the player on foot.
-        if (dist < 3.4 && cop.ramCooldown <= 0) {
-          cop.ramCooldown = 1.2;
-          world.audio.crash();
-          if (p.inCar) {
-            damageCar(world, p.inCar, CFG.policeRamDamage);
-            world.damagePlayer(6, 'ram');
-            p.inCar.speed *= 0.5;
-            car.speed *= 0.4;
-          } else {
-            world.damagePlayer(14, 'ram');
-          }
-        }
-      }
+      for (const cop of this.cops) this.chaseStep(cop, dt);
       this.cops = this.cops.filter((c) => !c.car.dead);
     },
   };
+  return api;
 }

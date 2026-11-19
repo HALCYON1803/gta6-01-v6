@@ -78,6 +78,7 @@ world.killPed = (ped, cause) => {
 };
 world.scaredAt = (x, z, r) => scarePeds(world, x, z, r);
 world.saveGame = () => writeSave(world);
+world.missionTargetPos = () => world.missions.targetPos();
 
 // ---- Screens ---------------------------------------------------------------
 const menuEl = document.getElementById('menu');
@@ -107,13 +108,8 @@ function hideMenu() {
   world.input.requestLock();
 }
 
-function startGame(fromSave) {
-  world.audio.unlock();
-  world.audio.click();
-  world.garage.hide();
-  if (fromSave && savedData) applySave(world, savedData);
-  world.player.health = CFG.playerHealth;
-  // A fresh run starts clean: no heat, no pursuing cops, no helicopter.
+// Clear every cop, roadblock and the helicopter so a fresh run starts clean.
+function clearHeat() {
   world.police.wanted = 0;
   world.police.hiddenTimer = 0;
   world.police.clearRoadblocks();
@@ -127,6 +123,15 @@ function startGame(fromSave) {
   }
   world.police.cops = [];
   world.audio.stopSiren();
+}
+
+function startGame(fromSave) {
+  world.audio.unlock();
+  world.audio.click();
+  world.garage.hide();
+  if (fromSave && savedData) applySave(world, savedData);
+  world.player.health = CFG.playerHealth;
+  clearHeat();
   world.hud.setStars(0);
   world.hud.setHealth(world.player.health);
   world.hud.setMoney(world.player.money);
@@ -157,14 +162,6 @@ function endGame(kind, cause) {
   world.saveGame();
 }
 
-btnPlay.addEventListener('click', () => {
-  if (world.state === 'paused') { world.state = 'play'; hideMenu(); world.hud.showHud(); return; }
-  startGame(false);
-});
-btnContinue.addEventListener('click', () => startGame(true));
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden && world.state === 'play') pauseGame();
-});
 function pauseGame() {
   if (world.state !== 'play') return;
   world.state = 'paused';
@@ -173,8 +170,14 @@ function pauseGame() {
   showMenu('paused', 'PAUSED', 'Take a breath, Rico. The Bay will wait — the cops might not.');
 }
 
-// ---- Mission target helper (used by the minimap) ---------------------------
-world.missionTargetPos = () => world.missions.targetPos();
+btnPlay.addEventListener('click', () => {
+  if (world.state === 'paused') { world.state = 'play'; hideMenu(); world.hud.showHud(); return; }
+  startGame(false);
+});
+btnContinue.addEventListener('click', () => startGame(true));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && world.state === 'play') pauseGame();
+});
 
 // ---- Input edges -----------------------------------------------------------
 const prevKeys = new Set();
@@ -192,7 +195,10 @@ function updateEffects(dt) {
     const fx = world.effects[i];
     fx.life -= dt;
     if (fx.kind === 'fireball') fx.mesh.scale.multiplyScalar(1 + dt * 2);
-    if (fx.kind === 'smoke') { fx.mesh.position.y += dt * 1.5; fx.mesh.material.opacity = Math.max(0, fx.life / 1.6 * 0.7); }
+    if (fx.kind === 'smoke') {
+      fx.mesh.position.y += dt * 1.5;
+      fx.mesh.material.opacity = Math.max(0, fx.life / 1.6 * 0.7);
+    }
     if (fx.kind === 'tracer' || fx.kind === 'spark') fx.mesh.material.opacity = Math.max(0, fx.life / 0.12);
     if (fx.life <= 0) {
       world.scene.remove(fx.mesh);
@@ -206,6 +212,64 @@ function updateEffects(dt) {
 // ---- Main loop ---------------------------------------------------------------
 const clock = new THREE.Clock();
 let hudTimer = 0;
+
+// One-shot keys while playing: pause, mute, next job, reload, radio,
+// garage, horn, weapon select, and E to enter / exit a car.
+function handlePlayKeys() {
+  if (edge('KeyP')) pauseGame();
+  if (edge('KeyM')) {
+    world.audio.setMuted(!world.audio.isMuted());
+    world.radio.setMuted(world.audio.isMuted());
+    world.toast(world.audio.isMuted() ? 'Sound muted (M)' : 'Sound on (M)');
+  }
+  if (edge('KeyN')) world.missions.nextMission();
+  if (edge('KeyR')) world.combat.startReload();
+  if (edge('KeyQ')) world.radio.next();
+  if (edge('KeyG')) world.garage.toggle();
+  if (edge('KeyH')) world.audio.horn();
+  for (let i = 0; i < WEAPON_ORDER.length; i++) {
+    if (edge(`Digit${i + 1}`)) world.combat.selectWeapon(WEAPON_ORDER[i]);
+  }
+  if (edge('KeyE')) {
+    if (world.player.inCar) exitCar(world);
+    else {
+      const car = nearestCar(world, 4.5);
+      if (car) {
+        enterCar(world, car);
+        world.stats.carsStolen += 1;
+      }
+    }
+  }
+  if (world.input.consumeClick() && !world.player.inCar) world.combat.tryShoot();
+  else if (world.input.mouseDown && !world.player.inCar && world.combat.weaponDef().auto) world.combat.tryShoot();
+}
+
+// Context hint under the crosshair: stealable car, or the garage nearby.
+function refreshHint() {
+  if (!world.player.inCar) {
+    const car = nearestCar(world, 4.5);
+    if (car) world.hud.setHint('Press E to steal the car');
+    else if (nearGarage(world)) world.hud.setHint('Sunset Garage — press G for upgrades');
+    else world.hud.setHint('');
+  } else if (nearGarage(world)) world.hud.setHint('Sunset Garage — press G for upgrades');
+  else world.hud.setHint('');
+}
+
+// Car-vs-ped collisions: a fast car knocks peds down.
+function checkCarPedHits() {
+  for (const car of world.cars) {
+    if (car.dead || Math.abs(car.speed) < 5) continue;
+    for (const ped of world.peds) {
+      if (!ped.alive || ped.down) continue;
+      const d = Math.hypot(car.mesh.position.x - ped.pos.x, car.mesh.position.z - ped.pos.z);
+      if (d < 2.0) {
+        world.knockPed(ped);
+        if (car.isPlayerCar) world.audio.crash();
+      }
+    }
+  }
+}
+
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -213,34 +277,7 @@ function frame() {
   const mouse = input.consumeMouse();
 
   if (world.state === 'play') {
-    // One-shot keys.
-    if (edge('KeyP')) pauseGame();
-    if (edge('KeyM')) {
-      world.audio.setMuted(!world.audio.isMuted());
-      world.radio.setMuted(world.audio.isMuted());
-      world.toast(world.audio.isMuted() ? 'Sound muted (M)' : 'Sound on (M)');
-    }
-    if (edge('KeyN')) world.missions.nextMission();
-    if (edge('KeyR')) world.combat.startReload();
-    if (edge('KeyQ')) world.radio.next();
-    if (edge('KeyG')) world.garage.toggle();
-    if (edge('KeyH')) world.audio.horn();
-    for (let i = 0; i < WEAPON_ORDER.length; i++) {
-      if (edge(`Digit${i + 1}`)) world.combat.selectWeapon(WEAPON_ORDER[i]);
-    }
-    if (edge('KeyE')) {
-      if (world.player.inCar) exitCar(world);
-      else {
-        const car = nearestCar(world, 4.5);
-        if (car) {
-          enterCar(world, car);
-          world.stats.carsStolen += 1;
-        }
-      }
-    }
-    if (input.consumeClick() && !world.player.inCar) world.combat.tryShoot();
-    else if (input.mouseDown && !world.player.inCar && world.combat.weaponDef().auto) world.combat.tryShoot();
-
+    handlePlayKeys();
     // Driving vs walking.
     if (world.player.inCar) {
       driveCar(world, world.player.inCar, input, dt);
@@ -261,28 +298,8 @@ function frame() {
     world.police.update(dt);
     world.combat.update(dt);
     world.missions.update(dt);
-
-    // Car-vs-ped collisions: a fast car knocks peds down.
-    for (const car of world.cars) {
-      if (car.dead || Math.abs(car.speed) < 5) continue;
-      for (const ped of world.peds) {
-        if (!ped.alive || ped.down) continue;
-        const d = Math.hypot(car.mesh.position.x - ped.pos.x, car.mesh.position.z - ped.pos.z);
-        if (d < 2.0) {
-          world.knockPed(ped);
-          if (car.isPlayerCar) world.audio.crash();
-        }
-      }
-    }
-    // Context hint: stealable car, or the garage when nearby.
-    if (!world.player.inCar) {
-      const car = nearestCar(world, 4.5);
-      if (car) world.hud.setHint('Press E to steal the car');
-      else if (nearGarage(world)) world.hud.setHint('Sunset Garage — press G for upgrades');
-      else world.hud.setHint('');
-    } else if (nearGarage(world)) world.hud.setHint('Sunset Garage — press G for upgrades');
-    else world.hud.setHint('');
-
+    checkCarPedHits();
+    refreshHint();
     hudTimer -= dt;
     if (hudTimer <= 0) {
       hudTimer = 0.12;

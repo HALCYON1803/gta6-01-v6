@@ -1,7 +1,9 @@
-// Deterministic RNG for the city layout, so the same seed builds the same Bay.
+// A tiny seeded generator so the city builds the same Bay every load.
+// The layout (towers, palms, traffic, peds) is drawn from fixed seeds, so
+// a screenshot taken today matches a screenshot taken tomorrow.
 export function makeRng(seed) {
   let s = (seed >>> 0) || 1;
-  return function rng() {
+  return function nextRandom() {
     s = (s * 1664525 + 1013904223) >>> 0;
     return s / 4294967296;
   };
@@ -10,11 +12,15 @@ export function makeRng(seed) {
 export function range(rng, lo, hi) { return lo + rng() * (hi - lo); }
 export function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
 export function pickIndex(rng, n) { return Math.floor(rng() * n); }
+
+// Fisher-Yates on a copy: the caller's array is never reordered in place.
 export function shuffle(rng, arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
   }
-  return a;
+  return out;
 }

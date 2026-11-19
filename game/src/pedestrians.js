@@ -63,39 +63,42 @@ export function scarePeds(world, x, z, radius) {
   }
 }
 
-export function updatePeds(world, dt) {
-  for (const ped of world.peds) {
-    if (!ped.alive) continue;
-    if (ped.down) {
-      // A knocked-down ped fades out, then gets back up off-screen.
-      ped.fade += dt;
-      ped.mesh.position.y = -Math.min(1, ped.fade) * 0.6;
-      ped.mesh.rotation.z = Math.min(1, ped.fade * 2) * 1.4;
-      if (ped.fade > 6) {
-        ped.down = false;
-        ped.fade = 0;
-        ped.mesh.position.y = 0;
-        ped.mesh.rotation.z = 0;
-        ped.mesh.position.x = range(Math.random, -180, 180);
-        ped.mesh.position.z = range(Math.random, -180, 180);
-      }
-      continue;
+// One ped, one frame. A downed ped sinks and tips over, then gets back
+// up somewhere else after a while; a scared ped sprints away from the
+// scare point; everyone else wanders the sidewalk and bounces off the
+// map edge.
+function stepPed(world, ped, dt) {
+  if (!ped.alive) return;
+  if (ped.down) {
+    ped.fade += dt;
+    ped.mesh.position.y = -Math.min(1, ped.fade) * 0.6;
+    ped.mesh.rotation.z = Math.min(1, ped.fade * 2) * 1.4;
+    if (ped.fade > 6) {
+      ped.down = false;
+      ped.fade = 0;
+      ped.mesh.position.y = 0;
+      ped.mesh.rotation.z = 0;
+      ped.mesh.position.x = range(Math.random, -180, 180);
+      ped.mesh.position.z = range(Math.random, -180, 180);
     }
-    let speed = ped.speed;
-    let heading = ped.heading;
-    if (ped.scared > 0) {
-      // Run away from the scare point.
-      ped.scared -= dt;
-      heading = Math.atan2(ped.pos.x - ped.scaredX, ped.pos.z - ped.scaredZ);
-      speed = 5.5;
-      ped.heading = heading;
-    }
-    ped.pos.x += Math.sin(heading) * speed * dt;
-    ped.pos.z += Math.cos(heading) * speed * dt;
-    ped.mesh.rotation.y = heading;
-    // Stroll along the sidewalk: bounce off the map edge, wander a little.
-    if (Math.abs(ped.pos.x) > 200 || Math.abs(ped.pos.z) > 200) ped.heading += Math.PI;
-    if (Math.random() < dt * 0.15) ped.heading += (Math.random() - 0.5) * 1.2;
-    resolveCircle(world.city.colliders, ped.pos, 0.5);
+    return;
   }
+  let speed = ped.speed;
+  let heading = ped.heading;
+  if (ped.scared > 0) {
+    ped.scared -= dt;
+    heading = Math.atan2(ped.pos.x - ped.scaredX, ped.pos.z - ped.scaredZ);
+    speed = 5.5;
+    ped.heading = heading;
+  }
+  ped.pos.x += Math.sin(heading) * speed * dt;
+  ped.pos.z += Math.cos(heading) * speed * dt;
+  ped.mesh.rotation.y = heading;
+  if (Math.abs(ped.pos.x) > 200 || Math.abs(ped.pos.z) > 200) ped.heading += Math.PI;
+  if (Math.random() < dt * 0.15) ped.heading += (Math.random() - 0.5) * 1.2;
+  resolveCircle(world.city.colliders, ped.pos, 0.5);
+}
+
+export function updatePeds(world, dt) {
+  for (const ped of world.peds) stepPed(world, ped, dt);
 }

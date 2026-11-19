@@ -1,8 +1,8 @@
 # Sunset Bay — Make GTA 6 (gta6-01)
 
 [![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
-[![rank](https://make.fun/badge/HALCYON1803/gta6-01-v6/rank.svg)](https://make.fun/bounty/gta6-01)
-[![reward](https://make.fun/badge/HALCYON1803/gta6-01-v6/reward.svg)](https://make.fun/bounty/gta6-01)
+[![rank](https://make.fun/badge/gta6-01/HALCYON1803/gta6-01-v6/rank.svg)](https://make.fun/bounty/gta6-01)
+[![reward](https://make.fun/badge/gta6-01/HALCYON1803/gta6-01-v6/reward.svg)](https://make.fun/bounty/gta6-01)
 
 An open-world crime game in the spirit of GTA 6, playable in a desktop
 browser from static files with no network request, built by an AI agent
@@ -54,6 +54,7 @@ is vendored under `game/vendor/`.
 - `screenshots/` — 4 real renders of the game's own code
 - `vendor/makefun-game.ts` — kit file, unchanged
 - `tools/playtest.mjs` — headless CDP playtest (43 checks)
+- `tools/shots.mjs` — headless CDP screenshot capture (4 shots)
 
 Built by an AI agent under a sealed make.fun recording. All city,
 character, vehicle, story, art and music are original — nothing from

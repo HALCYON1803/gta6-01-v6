@@ -1,0 +1,106 @@
+// Air One — the Sunset Bay PD helicopter. It joins the chase at 4 stars,
+// hovers above the player with a sweeping searchlight, and never loses
+// sight of you: while it is overhead your wanted level cannot cool off.
+// It leaves (climbing away) once the heat is gone.
+import * as THREE from 'three';
+import { CFG } from './config.js';
+
+export function createHeli(world) {
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x1c2f4a });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 4.6), bodyMat);
+  body.position.y = 0;
+  g.add(body);
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 4.2), bodyMat);
+  tail.position.set(0, 0.2, -4.0);
+  g.add(tail);
+  const glass = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.9, 1.4), new THREE.MeshLambertMaterial({ color: 0x9fd8ff }));
+  glass.position.set(0, 0.35, 1.8);
+  g.add(glass);
+  const rotor = new THREE.Mesh(new THREE.BoxGeometry(9.5, 0.08, 0.5), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+  rotor.position.y = 1.0;
+  g.add(rotor);
+  const tailRotor = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.0, 0.4), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+  tailRotor.position.set(0.45, 0.3, -5.8);
+  g.add(tailRotor);
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.24, 0.3, 4.62), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+  stripe.position.y = -0.1;
+  g.add(stripe);
+  // Searchlight: a cone of light the player can see sweeping the street.
+  const beam = new THREE.Mesh(
+    new THREE.ConeGeometry(3.2, 26, 12, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })
+  );
+  beam.position.y = -13;
+  g.add(beam);
+  const spot = new THREE.PointLight(0xfff2b0, 0, 30);
+  spot.position.y = -1;
+  g.add(spot);
+  g.visible = false;
+  world.scene.add(g);
+
+  const state = {
+    mesh: g,
+    rotor,
+    beam,
+    active: false,
+    leaving: false,
+    hoverH: 26,
+    // Where the helicopter holds station relative to the player. The chase
+    // screenshot preset moves it ahead of the player so it is in frame.
+    follow: { x: 10, z: -8 },
+    announceTimer: 0,
+    update(dt) {
+      const wanted = world.police.wanted;
+      if (!this.active && wanted >= CFG.heliWanted && world.state === 'play') {
+        this.active = true;
+        this.leaving = false;
+        g.visible = true;
+        const p = world.player.inCar ? world.player.inCar.mesh.position : world.player.pos;
+        g.position.set(p.x + 14, this.hoverH, p.z - 10);
+        world.toast('Air One overhead — the helicopter has your scent!');
+        world.audio.horn();
+      }
+      if (!this.active) return;
+      rotor.rotation.y += dt * 22;
+      tailRotor.rotation.x += dt * 30;
+      const p = world.player.inCar ? world.player.inCar.mesh.position : world.player.pos;
+      if (wanted === 0 || this.leaving) {
+        // Climb away and disappear.
+        this.leaving = true;
+        g.position.y += dt * 14;
+        g.position.x += dt * 6;
+        if (g.position.y > 90) {
+          this.active = false;
+          this.leaving = false;
+          g.visible = false;
+        }
+        return;
+      }
+      // Hover above and slightly behind the player, spotlight on them.
+      const tx = p.x + this.follow.x, tz = p.z + this.follow.z;
+      g.position.x += (tx - g.position.x) * Math.min(1, dt * 1.1);
+      g.position.z += (tz - g.position.z) * Math.min(1, dt * 1.1);
+      g.position.y += (this.hoverH + Math.sin(performance.now() / 900) * 1.2 - g.position.y) * Math.min(1, dt * 2);
+      const dx = p.x - g.position.x, dz = p.z - g.position.z;
+      g.rotation.y = Math.atan2(dx, dz);
+      // Sweep the beam in a slow circle around the player.
+      const t = performance.now() / 1600;
+      beam.position.x = Math.sin(t) * 2.2;
+      beam.position.z = Math.cos(t) * 2.2;
+      beam.rotation.z = Math.sin(t) * 0.12;
+      beam.rotation.x = -Math.cos(t) * 0.12;
+      this.announceTimer -= dt;
+    },
+    reset() {
+      this.active = false;
+      this.leaving = false;
+      g.visible = false;
+      g.position.y = this.hoverH;
+    },
+  };
+  return state;
+}
+// Note: the helicopter is a visual + rules object, not a car: it never
+// collides, never takes damage, and its only job is to pin the wanted
+// level while it circles. Shooting it down is not part of this build.

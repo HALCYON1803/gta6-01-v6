@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Sunset Bay — Open World Crime</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#1a2b45;font-family:'Segoe UI',Arial,sans-serif;}
+  #game-canvas{position:fixed;inset:0;width:100%;height:100%;display:block;}
+  .hidden{display:none !important;}
+  #hud{position:fixed;inset:0;pointer-events:none;color:#fff;z-index:5;}
+  #health-wrap{position:absolute;top:14px;left:14px;width:240px;}
+  #health-bar-outer{height:16px;background:rgba(0,0,0,.55);border:2px solid rgba(255,255,255,.7);border-radius:8px;overflow:hidden;}
+  #health-bar{height:100%;width:100%;background:linear-gradient(90deg,#37d67a,#7cf2a8);transition:width .2s;}
+  #money{margin-top:6px;font-size:22px;font-weight:700;text-shadow:0 2px 4px #000;}
+  #money small{font-size:13px;color:#9fe8b4;}
+  #respect{margin-top:2px;font-size:14px;font-weight:600;color:#ffd94a;text-shadow:0 2px 3px #000;}
+  #ammo{margin-top:4px;font-size:15px;font-weight:600;text-shadow:0 2px 3px #000;}
+  #radio{margin-top:2px;font-size:14px;font-weight:600;color:#7cf2ff;text-shadow:0 2px 3px #000;}
+  #stars{position:absolute;top:12px;right:16px;font-size:30px;letter-spacing:4px;text-shadow:0 2px 6px #000;color:#ffd94a;}
+  #stars .dim{color:rgba(255,255,255,.35);}
+  #mission-box{position:absolute;top:14px;left:50%;transform:translateX(-50%);text-align:center;max-width:520px;}
+  #mission-title{font-size:18px;font-weight:800;text-shadow:0 2px 4px #000;color:#ffe9a8;}
+  #mission-step{font-size:15px;text-shadow:0 2px 4px #000;}
+  #mission-dist{font-size:14px;color:#bfe3ff;text-shadow:0 2px 4px #000;}
+  #toast{position:absolute;top:110px;left:50%;transform:translateX(-50%);font-size:19px;font-weight:700;color:#fff;text-shadow:0 2px 5px #000;background:rgba(0,0,0,.35);padding:6px 16px;border-radius:20px;opacity:0;transition:opacity .3s;}
+  #crosshair{position:absolute;top:50%;left:50%;width:22px;height:22px;transform:translate(-50%,-50%);}
+  #crosshair:before,#crosshair:after{content:"";position:absolute;background:#fff;box-shadow:0 0 3px #000;}
+  #crosshair:before{left:10px;top:0;width:2px;height:22px;}
+  #crosshair:after{top:10px;left:0;height:2px;width:22px;}
+  #speedo{position:absolute;bottom:18px;right:18px;font-size:26px;font-weight:800;text-shadow:0 2px 5px #000;text-align:right;}
+  #speedo small{font-size:13px;display:block;color:#cfe8ff;}
+  #nos-wrap{margin-top:4px;width:150px;height:10px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.6);border-radius:5px;overflow:hidden;}
+  #nos-bar{height:100%;width:100%;background:#2e6fd8;}
+  #nos-wrap small{font-size:11px;color:#7cf2ff;}
+  #minimap{position:absolute;left:14px;bottom:14px;border:2px solid rgba(255,255,255,.75);border-radius:8px;background:rgba(10,20,35,.6);box-shadow:0 2px 8px rgba(0,0,0,.5);}
+  #hint{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);font-size:15px;background:rgba(0,0,0,.55);padding:6px 14px;border-radius:16px;text-shadow:0 1px 3px #000;}
+  #menu{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(10,25,55,.25) 0%,rgba(10,25,55,.72) 100%);}
+  #menu-card{background:rgba(8,18,38,.88);border:2px solid rgba(255,200,90,.55);border-radius:16px;padding:28px 36px;max-width:560px;color:#fff;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.6);}
+  #menu-card h1{margin:0 0 4px;font-size:46px;letter-spacing:2px;color:#ffb347;text-shadow:0 3px 0 #7a2e00,0 6px 14px #000;}
+  #menu-card h2{margin:0 0 14px;font-size:15px;font-weight:400;color:#bfe3ff;letter-spacing:3px;text-transform:uppercase;}
+  #menu-card p{font-size:15px;line-height:1.55;color:#e8f1ff;text-align:left;}
+  #menu-card .controls{font-size:14px;line-height:1.9;text-align:left;background:rgba(255,255,255,.07);border-radius:10px;padding:10px 16px;margin:12px 0;}
+  #menu-card .controls b{color:#ffd94a;}
+  .big-btn{pointer-events:auto;cursor:pointer;font-size:20px;font-weight:800;color:#3a2200;background:linear-gradient(180deg,#ffd94a,#ff9d2e);border:none;border-radius:12px;padding:13px 42px;margin:6px 8px 0;box-shadow:0 4px 0 #a35c00,0 6px 16px rgba(0,0,0,.5);}
+  .big-btn:hover{filter:brightness(1.08);}
+  .big-btn.secondary{background:linear-gradient(180deg,#9fd8ff,#4a90d9);color:#082a4a;box-shadow:0 4px 0 #245a8f,0 6px 16px rgba(0,0,0,.5);}
+  #end-title{font-size:52px;font-weight:900;letter-spacing:4px;margin:0;}
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;background:radial-gradient(ellipse at center,transparent 55%,rgba(120,0,0,.35) 100%);opacity:0;transition:opacity .4s;}
+  #loading{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;color:#fff;background:#16283f;font-size:20px;}
+  #garage-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:15;background:rgba(8,18,38,.95);border:2px solid #37e6ff;border-radius:14px;padding:20px 26px;color:#fff;width:420px;box-shadow:0 10px 40px rgba(0,0,0,.7);}
+  #garage-panel h2{margin:0 0 4px;color:#7cf2ff;font-size:24px;}
+  #garage-panel p{margin:0 0 12px;font-size:14px;color:#bfe3ff;}
+  .garage-row{padding:10px 0;border-top:1px solid rgba(255,255,255,.15);font-size:14px;line-height:1.5;}
+  .garage-row button{pointer-events:auto;cursor:pointer;font-weight:700;color:#082a4a;background:linear-gradient(180deg,#7cf2ff,#2e9fd8);border:none;border-radius:8px;padding:6px 14px;margin-top:4px;}
+  .garage-row button:disabled{opacity:.45;cursor:default;}
+  .garage-row .owned{color:#7cf2a8;font-weight:700;}
+  #garage-close{pointer-events:auto;cursor:pointer;margin-top:12px;font-weight:800;color:#3a2200;background:linear-gradient(180deg,#ffd94a,#ff9d2e);border:none;border-radius:10px;padding:9px 26px;}
+</style>
+<script type="importmap">
+{"imports":{"three":"./vendor/three.min.js"}}
+</script>
+</head>
+<body>
+<div id="loading">Loading Sunset Bay…</div>
+<canvas id="game-canvas"></canvas>
+<div id="vignette"></div>
+<div id="hud" class="hidden">
+  <div id="health-wrap">
+    <div id="health-bar-outer"><div id="health-bar"></div></div>
+    <div id="money">$<span id="money-val">500</span> <small>Sunset Bay</small></div>
+    <div id="respect">Respect: <span id="respect-val">0 · Rookie</span></div>
+    <div id="ammo">Pistol 12 / 12</div>
+    <div id="radio">♪ Radio off — press Q</div>
+  </div>
+  <div id="stars"></div>
+  <div id="mission-box">
+    <div id="mission-title"></div>
+    <div id="mission-step"></div>
+    <div id="mission-dist"></div>
+  </div>
+  <div id="toast"></div>
+  <div id="crosshair"></div>
+  <div id="speedo" class="hidden">0<small>km/h — SPACE handbrake · SHIFT NOS</small><div id="nos-wrap" class="hidden"><div id="nos-bar"></div><small>NOS</small></div></div>
+  <canvas id="minimap" width="190" height="190"></canvas>
+  <div id="hint" class="hidden"></div>
+</div>
+<div id="garage-panel" class="hidden">
+  <h2>Sunset Garage</h2>
+  <p>Cash: <b id="garage-money">$500</b> — upgrades stay on your ride and save with the game.</p>
+  <div id="garage-list"></div>
+  <button id="garage-close">CLOSE (G)</button>
+</div>
+<div id="menu" class="hidden">
+  <div id="menu-card">
+    <h1>SUNSET BAY</h1>
+    <h2>An open-world crime story — 8 jobs</h2>
+    <p id="menu-story">You are <b>Rico Marlowe</b>, a wheelman fresh out of the harbor lockup. The Bay is yours again — sun, surf, fast cars and faster trouble. Run couriers, dodge the Sunset Bay PD, and take back the harbor from the rival crew that set you up.</p>
+    <div class="controls">
+      <b>W A S D</b> move / drive &nbsp;·&nbsp; <b>Mouse</b> look &nbsp;·&nbsp; <b>Shift</b> sprint / NOS boost<br>
+      <b>Space</b> jump / handbrake &nbsp;·&nbsp; <b>E</b> steal / enter / exit car<br>
+      <b>Click</b> shoot &nbsp;·&nbsp; <b>R</b> reload &nbsp;·&nbsp; <b>1–4</b> weapons &nbsp;·&nbsp; <b>Q</b> radio<br>
+      <b>G</b> garage (at the blue-roof garage) &nbsp;·&nbsp; <b>N</b> next job &nbsp;·&nbsp; <b>P</b> pause &nbsp;·&nbsp; <b>M</b> mute
+    </div>
+    <div id="menu-buttons">
+      <button class="big-btn" id="btn-play">▶ PLAY</button>
+      <button class="big-btn secondary hidden" id="btn-continue">CONTINUE</button>
+    </div>
+    <p id="menu-save-info" style="text-align:center;font-size:13px;color:#9fe8b4;"></p>
+    <p id="end-text" style="text-align:center;"></p>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

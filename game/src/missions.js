@@ -4,6 +4,10 @@
 // handler below; the update loop just dispatches to the current one.
 // Missions run one at a time, in order, and can be replayed. Each finished
 // mission pays cash and +100 respect toward the next rank.
+//
+// v7: starting a job opens the giver's dialogue box (name, role, line
+// from the mission def), and finishing or failing a job closes it — the
+// story is visible on screen, not just in the toast.
 import * as THREE from 'three';
 import { CFG, MISSION_DEFS, respectTitle } from './config.js';
 import { createCar } from './vehicles.js';
@@ -48,6 +52,10 @@ export function createMissions(world) {
       if (s.type === 'steal' && this.exportCar && !this.exportCar.dead) {
         return { x: this.exportCar.mesh.position.x, z: this.exportCar.mesh.position.z };
       }
+      // A heat step has no place to go — its target is the player's own
+      // feet, so no beacon and no minimap dot: the mission text and the
+      // wanted stars already say what to do.
+      if (s.type === 'heat') return null;
       return { x: s.x, z: s.z };
     },
     onCrime() {
@@ -104,6 +112,7 @@ export function createMissions(world) {
       this.beginStep();
       this.refreshBeacon();
       world.hud.setMission(def.name, this.stepText(), '');
+      world.hud.setDialogue(def.giver);
       world.saveGame();
     },
     beginStep() {
@@ -152,6 +161,7 @@ export function createMissions(world) {
       world.toast(`Mission complete: ${def.name} — +$${reward} · +100 respect (${respectTitle(world.player.respect)})`);
       world.hud.setMission('', 'All jobs in this chain done — press N for the next one', '');
       world.hud.setRespect(world.player.respect);
+      world.hud.hideDialogue();
       beacon.visible = false;
       marker.visible = false;
       world.saveGame();
@@ -163,6 +173,7 @@ export function createMissions(world) {
       this.clearRivals();
       world.toast(`${msg} Press N to retry.`);
       world.hud.setMission('', `${msg} Press N to retry.`, '');
+      world.hud.hideDialogue();
     },
     advance() {
       const def = this.def();

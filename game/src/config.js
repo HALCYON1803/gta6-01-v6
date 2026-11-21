@@ -1,8 +1,10 @@
-// Sunset Bay — one home for every number the game balances on.
+// Sunset Bay v7 — every number the game balances on, in one place.
 // Nothing here is read from anywhere else at runtime: tune the feel of
-// the whole Bay by editing this file alone. v6's additions live here too:
-// eight story jobs, four guns, three radio stations, garage parts,
-// respect ranks, and the heat levels that call in roadblocks and Air One.
+// the whole Bay by editing this file alone. v7 keeps v6's numbers exactly
+// and adds only presentation data: a mission giver per job (name, role,
+// one original line), the SBPD dispatch callsign pool, and street names
+// for the player's car. The dispatch panel, weapon slots and dialogue box
+// all read their text from here, so no HUD string is invented elsewhere.
 export const CFG = {
   worldHalf: 210,
   blockSize: 60,
@@ -110,6 +112,31 @@ export function respectTitle(respect) {
   }
   return title;
 }
+// Progress to the next rank, 0..1, for the respect bar on the HUD.
+export function respectProgress(respect) {
+  for (let i = 0; i < RESPECT_RANKS.length - 1; i++) {
+    if (respect < RESPECT_RANKS[i + 1].at) {
+      return (respect - RESPECT_RANKS[i].at) / (RESPECT_RANKS[i + 1].at - RESPECT_RANKS[i].at);
+    }
+  }
+  return 1;
+}
+
+// SBPD dispatch callsigns: one per pursuit unit, handed out in spawn
+// order and cycled when more units arrive than the pool holds. The
+// helicopter is always AIR-1. All names are original to Sunset Bay.
+export const DISPATCH_CALLSIGNS = [
+  'EGRET-6', 'TERN-9', 'MULLET-21', 'SNOOK-14',
+  'COBIA-33', 'JACK-27', 'POMPANO-8', 'GROUPER-19',
+];
+export const HELI_CALLSIGN = 'AIR-1';
+
+// Street names for the player's car, picked by seed in vehicles.js.
+// The police cruiser is always the SBPD Interceptor.
+export const CAR_MODELS = [
+  'Bayside GT', 'Palmetto S', 'Dune Runner',
+  'Corso V8', 'Tidewater LX', 'Marina GT',
+];
 
 // Step builders: one per step kind, so a mission reads as a short list
 // of calls instead of a wall of object literals. The objects they build
@@ -127,11 +154,14 @@ function wreck(x, z, count, label) { return { type: 'destroy', x, z, count, labe
 function heatStep(x, z, label) { return { type: 'heat', x, z, label }; }
 function stealStep(x, z, label) { return { type: 'steal', x, z, label }; }
 
-// The eight story jobs, in the order the N key hands them out.
+// The eight story jobs, in the order the N key hands them out. Each job
+// has a giver — a named character whose line opens the job in the
+// dialogue box. Giver names and lines are original to Sunset Bay.
 export const MISSION_DEFS = [
   {
     id: 'courier',
     name: 'Courier Run',
+    giver: { name: 'Lena Cross', role: 'Dispatcher', initials: 'LC', line: 'Four drops, in order. No detours, no questions — the Bay pays on time.' },
     intro: 'Deliver the package to 4 drop points, in order. Steal a car — it is faster.',
     steps: [
       goTo(150, -150, 'Drop 1 — Marina Gate'),
@@ -143,12 +173,14 @@ export const MISSION_DEFS = [
   {
     id: 'getaway',
     name: 'Getaway',
+    giver: { name: 'Mara Voss', role: 'Fixer', initials: 'MV', line: 'Get hot enough that the whole Bay sees you — then vanish like you were never there.' },
     intro: 'Raise your heat to 3 stars, then lose the cops completely before the clock runs out.',
     steps: [heatStep(0, 0, 'Lose the heat — stay unseen')],
   },
   {
     id: 'harbor',
     name: 'Harbor Takedown',
+    giver: { name: 'Dante Cole', role: 'Harbor Boss', initials: 'DC', line: 'One rival car at the harbor. Wreck it, then come home to the Pier House.' },
     intro: 'Destroy the rival crew car at the harbor, then reach the hideout.',
     steps: [
       wreck(-168, -168, 1, 'Rival car — Harbor Yard'),
@@ -158,6 +190,7 @@ export const MISSION_DEFS = [
   {
     id: 'streetrace',
     name: 'Sunset Grand Prix',
+    giver: { name: 'Kiki Santos', role: 'Race Organizer', initials: 'KS', line: 'Five gates, one hundred seconds. Beat the clock and the Bay is yours.' },
     intro: 'Street race! Hit all 5 gates before the 100 second clock runs out. A car helps a lot.',
     steps: [
       goTimed(120, -60, 100, 'Gate 1 — Marina Straight'),
@@ -170,6 +203,7 @@ export const MISSION_DEFS = [
   {
     id: 'taxifare',
     name: 'Cab Hustle',
+    giver: { name: 'Bea Fontaine', role: 'Diner Owner', initials: 'BF', line: 'Borrowed cab, three fares. Quick drops mean fat tips — drive like you mean it.' },
     intro: 'You borrowed a cab. Pick up 3 fares and drop each one off — tips pay if you are quick.',
     steps: [
       goTo(-60, -120, 'Pick up fare 1 — North Docks'),
@@ -183,6 +217,7 @@ export const MISSION_DEFS = [
   {
     id: 'robbery',
     name: 'Corner Store Job',
+    giver: { name: 'Bea Fontaine', role: 'Diner Owner', initials: 'BF', line: 'Eight seconds at the till. The alarm will sing — stay put anyway.' },
     intro: 'Rob the Corner Store: stand at the counter for 8 seconds. The cops WILL come — then run to the hideout.',
     steps: [
       goTo(60, 170, 'Corner Store — get inside'),
@@ -193,6 +228,7 @@ export const MISSION_DEFS = [
   {
     id: 'export',
     name: 'Hot Wheels Export',
+    giver: { name: 'Gus Ferreira', role: 'Buyer', initials: 'GF', line: 'Gold coupe by Marina Gate. Bring it to my docks in ninety seconds and it is yours to sell.' },
     intro: 'A buyer at the docks wants the gold coupe parked by Marina Gate. Steal it and deliver it in 90 seconds.',
     steps: [
       stealStep(150, -120, 'Steal the gold coupe — Marina Gate'),
@@ -202,6 +238,7 @@ export const MISSION_DEFS = [
   {
     id: 'showdown',
     name: 'Harbor Showdown',
+    giver: { name: 'Nadia Reyes', role: 'Crew Lieutenant', initials: 'NR', line: 'Three of them at the harbor. Send them all home in smoke.' },
     intro: 'The rival crew sent three cars to the harbor. Wreck all three, then get to the hideout.',
     steps: [
       wreck(-168, -168, 3, 'Rival crew — 3 cars at the Harbor'),

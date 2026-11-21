@@ -98,6 +98,30 @@ export function exitCar(world) {
   world.audio.stopEngine();
 }
 
+// Jump on Space, then gravity until the feet touch the ground again.
+function doJump(p, input, dt) {
+  if (input.pressed('Space') && p.grounded) {
+    p.velY = CFG.playerJump;
+    p.grounded = false;
+  }
+  if (!p.grounded) {
+    p.velY -= CFG.gravity * dt;
+    p.pos.y += p.velY * dt;
+    if (p.pos.y <= 0) { p.pos.y = 0; p.velY = 0; p.grounded = true; }
+  }
+}
+
+// Run into a pedestrian hard enough and they go down.
+function bumpCheck(world, p, moveLen, speed) {
+  for (const ped of world.peds) {
+    if (!ped.alive || ped.down) continue;
+    const d = Math.hypot(ped.pos.x - p.pos.x, ped.pos.z - p.pos.z);
+    if (d < 0.9 && moveLen > 0.01 && speed > 9) {
+      world.knockPed(ped);
+    }
+  }
+}
+
 // WASD relative to the camera yaw, Shift to sprint, Space to jump.
 // Movement is clamped to the map and pushed out of building colliders;
 // sprinting into a pedestrian hard enough knocks them down (a crime!).
@@ -123,33 +147,9 @@ export function updatePlayerOnFoot(world, dt, camYaw) {
     p.mesh.rotation.z = 0;
   }
   p.mesh.rotation.y = p.heading;
-  stepJump(p, input, dt);
+  doJump(p, input, dt);
   p.pos.x = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, p.pos.x));
   p.pos.z = Math.max(-CFG.worldHalf, Math.min(CFG.worldHalf, p.pos.z));
   resolveCircle(world.city.colliders, p.pos, 0.55);
-  checkPedBumps(world, p, len, speed);
-}
-
-// Jump on Space, then gravity until the feet touch the ground again.
-function stepJump(p, input, dt) {
-  if (input.pressed('Space') && p.grounded) {
-    p.velY = CFG.playerJump;
-    p.grounded = false;
-  }
-  if (!p.grounded) {
-    p.velY -= CFG.gravity * dt;
-    p.pos.y += p.velY * dt;
-    if (p.pos.y <= 0) { p.pos.y = 0; p.velY = 0; p.grounded = true; }
-  }
-}
-
-// Run into a pedestrian hard enough and they go down.
-function checkPedBumps(world, p, moveLen, speed) {
-  for (const ped of world.peds) {
-    if (!ped.alive || ped.down) continue;
-    const d = Math.hypot(ped.pos.x - p.pos.x, ped.pos.z - p.pos.z);
-    if (d < 0.9 && moveLen > 0.01 && speed > 9) {
-      world.knockPed(ped);
-    }
-  }
+  bumpCheck(world, p, len, speed);
 }

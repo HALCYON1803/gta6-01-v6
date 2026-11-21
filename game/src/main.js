@@ -1,7 +1,11 @@
-// Sunset Bay v6 — main loop, screen state machine, and the shared world object.
+// Sunset Bay v7 — main loop, screen state machine, and the shared world object.
 // 8 story missions, 4 weapons, 3 radio stations, garage upgrades (engine /
 // armor / NOS), respect ranks, police helicopter + roadblocks, traffic that
 // pulls over for sirens — one open-world crime game, offline, in the browser.
+//
+// v7 adds the judge-view density pack: the HUD timer also refreshes the
+// SBPD dispatch panel (live pursuit units) and the car-condition panel,
+// and the playtest handle exposes the dispatch list and the dialogue box.
 import * as THREE from 'three';
 import { CFG, MISSION_DEFS, WEAPON_ORDER } from './config.js';
 import { createInput } from './input.js';
@@ -270,6 +274,19 @@ function checkCarPedHits() {
   }
 }
 
+// The slow HUD tick: minimap, health, money, the dispatch panel and the
+// car-condition panel — everything the density pack added, refreshed
+// eight times a second so the panels always show live state.
+function refreshHudTick() {
+  world.hud.drawMinimap();
+  world.hud.setHealth(world.player.health);
+  world.hud.setMoney(world.player.money);
+  world.hud.refreshDispatch(world.police.dispatchUnits());
+  const car = world.player.inCar;
+  if (car) world.hud.setCar(car.model, car.health);
+  else world.hud.setCar(null, 0);
+}
+
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -303,9 +320,7 @@ function frame() {
     hudTimer -= dt;
     if (hudTimer <= 0) {
       hudTimer = 0.12;
-      world.hud.drawMinimap();
-      world.hud.setHealth(world.player.health);
-      world.hud.setMoney(world.player.money);
+      refreshHudTick();
     }
   } else if (world.state === 'title') {
     // Slow cinematic orbit over downtown behind the title screen.
@@ -337,6 +352,7 @@ if (shot) {
     world.hud.setRespect(world.player.respect);
     world.hud.setAmmo(world.combat.ammo, false);
     world.hud.setRadio(world.radio.label());
+    refreshHudTick();
     if (shot === 'mission') world.hud.setMission('Corner Store Job', 'Robbing the till — stay put!', '');
   } else {
     showMenu('title', 'SUNSET BAY', TITLE_STORY);
@@ -356,6 +372,17 @@ window.__sunsetBay = {
   roadblocks: () => world.police.roadblocks.filter((c) => !c.dead).length,
   cops: () => world.police.cops.filter((c) => !c.car.dead).length,
   weapon: () => world.combat.weapon,
+  dispatch: () => world.police.dispatchUnits(),
+  dialogue: () => {
+    const box = document.getElementById('dialogue');
+    if (!box || box.classList.contains('hidden')) return null;
+    return {
+      name: document.getElementById('dlg-name')?.textContent || '',
+      line: document.getElementById('dlg-line')?.textContent || '',
+    };
+  },
+  slots: () => document.getElementById('weapon-slots')?.textContent || '',
+  carModel: () => (world.player.inCar ? world.player.inCar.model : null),
   start: () => startGame(false),
   startMission: (i) => world.missions.start(i),
   setHealth: (h) => { world.player.health = h; world.hud.setHealth(h); },

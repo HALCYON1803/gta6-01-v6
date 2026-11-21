@@ -16,11 +16,13 @@ export function pickIndex(rng, n) { return Math.floor(rng() * n); }
 // Fisher-Yates on a copy: the caller's array is never reordered in place.
 export function shuffle(rng, arr) {
   const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
+  let i = out.length - 1;
+  while (i > 0) {
     const j = Math.floor(rng() * (i + 1));
-    const tmp = out[i];
+    const held = out[i];
     out[i] = out[j];
-    out[j] = tmp;
+    out[j] = held;
+    i -= 1;
   }
   return out;
 }

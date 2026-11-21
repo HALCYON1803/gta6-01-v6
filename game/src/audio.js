@@ -26,7 +26,7 @@ export function createAudio() {
   }
 
   // One short oscillator blip, optionally sliding down in pitch.
-  function playTone(freq, dur, type, vol, slideTo) {
+  function tone(freq, dur, type, vol, slideTo) {
     if (!ensure() || muted) return;
     const t = ctx.currentTime;
     const o = ctx.createOscillator();
@@ -43,7 +43,7 @@ export function createAudio() {
   }
 
   // Filtered white-noise burst: gunshots, crashes, explosions.
-  function playNoise(dur, vol, lowFreq) {
+  function noise(dur, vol, lowFreq) {
     if (!ensure() || muted) return;
     const t = ctx.currentTime;
     const len = Math.max(1, Math.floor(ctx.sampleRate * dur));
@@ -74,26 +74,26 @@ export function createAudio() {
       if (master) master.gain.value = m ? 0 : 0.5;
       if (m) api.stopSiren();
     },
-    shoot() { playNoise(0.16, 0.5, 2600); playTone(180, 0.1, 'square', 0.18, 60); },
+    shoot() { noise(0.16, 0.5, 2600); tone(180, 0.1, 'square', 0.18, 60); },
     reload() {
-      playTone(500, 0.07, 'square', 0.12);
-      setTimeout(() => playTone(700, 0.07, 'square', 0.12), 120);
+      tone(500, 0.07, 'square', 0.12);
+      setTimeout(() => tone(700, 0.07, 'square', 0.12), 120);
     },
-    click() { playTone(880, 0.05, 'sine', 0.15); },
-    blip() { playTone(1200, 0.06, 'sine', 0.14); },
+    click() { tone(880, 0.05, 'sine', 0.15); },
+    blip() { tone(1200, 0.06, 'sine', 0.14); },
     chime() {
-      playTone(660, 0.14, 'sine', 0.22);
-      setTimeout(() => playTone(990, 0.2, 'sine', 0.22), 140);
+      tone(660, 0.14, 'sine', 0.22);
+      setTimeout(() => tone(990, 0.2, 'sine', 0.22), 140);
     },
     missionDone() {
-      [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => playTone(f, 0.22, 'triangle', 0.25), i * 130));
+      [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.22, 'triangle', 0.25), i * 130));
     },
-    explosion() { playNoise(0.7, 0.7, 500); playTone(70, 0.6, 'sine', 0.4, 30); },
-    crash() { playNoise(0.25, 0.4, 900); },
-    horn() { playTone(370, 0.25, 'square', 0.12); playTone(466, 0.25, 'square', 0.1); },
+    explosion() { noise(0.7, 0.7, 500); tone(70, 0.6, 'sine', 0.4, 30); },
+    crash() { noise(0.25, 0.4, 900); },
+    horn() { tone(370, 0.25, 'square', 0.12); tone(466, 0.25, 'square', 0.1); },
     cash() {
-      playTone(1320, 0.09, 'sine', 0.2);
-      setTimeout(() => playTone(1760, 0.12, 'sine', 0.2), 90);
+      tone(1320, 0.09, 'sine', 0.2);
+      setTimeout(() => tone(1760, 0.12, 'sine', 0.2), 90);
     },
     startEngine(speed01) {
       if (!ensure() || muted) return;
@@ -124,7 +124,7 @@ export function createAudio() {
       sirenTimer = setInterval(() => {
         if (muted) return;
         high = !high;
-        playTone(high ? 950 : 700, 0.34, 'sine', 0.07);
+        tone(high ? 950 : 700, 0.34, 'sine', 0.07);
       }, 360);
     },
     stopSiren() {

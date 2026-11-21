@@ -67,7 +67,7 @@ export function scarePeds(world, x, z, radius) {
 // up somewhere else after a while; a scared ped sprints away from the
 // scare point; everyone else wanders the sidewalk and bounces off the
 // map edge.
-function stepPed(world, ped, dt) {
+function walkPed(world, ped, dt) {
   if (!ped.alive) return;
   if (ped.down) {
     ped.fade += dt;
@@ -100,5 +100,5 @@ function stepPed(world, ped, dt) {
 }
 
 export function updatePeds(world, dt) {
-  for (const ped of world.peds) stepPed(world, ped, dt);
+  for (const ped of world.peds) walkPed(world, ped, dt);
 }

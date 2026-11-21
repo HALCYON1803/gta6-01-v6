@@ -6,6 +6,9 @@
 // direction — a ray cast from the camera through the player dives into
 // the ground and never hits anything past ~6 m, which is how v5's
 // shooting was silently broken at range.
+//
+// v7: the HUD's weapon-slot row reads every magazine through magOf(), so
+// the slots show real ammo for all four guns, not just the current one.
 import * as THREE from 'three';
 import { CFG, WEAPONS, WEAPON_ORDER } from './config.js';
 import { damageCar } from './vehicles.js';
@@ -18,7 +21,7 @@ export function createCombat(world) {
   for (const id of WEAPON_ORDER) mags[id] = WEAPONS[id].mag;
 
   // Every mesh a bullet can hit right now: living peds and live cars.
-  function collectTargets() {
+  function liveTargets() {
     const found = [];
     for (const ped of world.peds) {
       if (ped.alive && !ped.down) found.push({ mesh: ped.mesh, kind: 'ped', ref: ped });
@@ -39,6 +42,15 @@ export function createCombat(world) {
     world.effects.push({ mesh: spark, life: 0.12, kind: 'spark' });
   }
 
+  // The tracer line from the muzzle to the impact point (or max range).
+  function spawnTracer(from, to) {
+    const tracerMat = new THREE.LineBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.9 });
+    const tracerGeo = new THREE.BufferGeometry().setFromPoints([from, to]);
+    const tracer = new THREE.Line(tracerGeo, tracerMat);
+    world.scene.add(tracer);
+    world.effects.push({ mesh: tracer, life: 0.08, kind: 'tracer' });
+  }
+
   const api = {
     weapon: 'pistol',
     ammo: WEAPONS.pistol.mag,
@@ -47,6 +59,8 @@ export function createCombat(world) {
     reloadTimer: 0,
     reloading: false,
     weaponDef() { return WEAPONS[this.weapon]; },
+    magOf(id) { return mags[id] ?? WEAPONS[id].mag; },
+    refreshAmmo() { world.hud.setAmmo(this.ammo, this.reloading); },
     update(dt) {
       this.cooldown = Math.max(0, this.cooldown - dt);
       if (this.reloading) {
@@ -57,7 +71,7 @@ export function createCombat(world) {
           this.ammo = def.mag;
           mags[this.weapon] = this.ammo;
           world.audio.reload();
-          world.hud.setAmmo(this.ammo, false);
+          this.refreshAmmo();
         }
       }
       flash.intensity = Math.max(0, flash.intensity - dt * 220);
@@ -68,7 +82,7 @@ export function createCombat(world) {
       this.weapon = id;
       this.ammo = mags[id];
       world.audio.blip();
-      world.hud.setAmmo(this.ammo, false);
+      this.refreshAmmo();
       world.toast(`${WEAPONS[id].name} ready — ${this.ammo} in the mag`);
       return true;
     },
@@ -77,7 +91,7 @@ export function createCombat(world) {
       if (this.reloading || this.ammo === def.mag) return;
       this.reloading = true;
       this.reloadTimer = def.reload;
-      world.hud.setAmmo(this.ammo, true);
+      this.refreshAmmo();
     },
     tryShoot() {
       if (this.cooldown > 0 || this.reloading || world.state !== 'play') return;
@@ -95,7 +109,7 @@ export function createCombat(world) {
       const yaw = world.camState.yaw;
       const baseDir = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
       const up = new THREE.Vector3(0, 1, 0);
-      const targets = collectTargets();
+      const targets = liveTargets();
       const meshes = targets.map((t) => t.mesh);
       let endPoint = null;
       for (let pellet = 0; pellet < def.pellets; pellet++) {
@@ -116,15 +130,10 @@ export function createCombat(world) {
           endPoint = gunWorld.clone().add(dir.clone().multiplyScalar(def.range));
         }
       }
-      // Tracer line from gun to impact.
-      const tracerMat = new THREE.LineBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.9 });
-      const tracerGeo = new THREE.BufferGeometry().setFromPoints([gunWorld, endPoint]);
-      const tracer = new THREE.Line(tracerGeo, tracerMat);
-      world.scene.add(tracer);
-      world.effects.push({ mesh: tracer, life: 0.08, kind: 'tracer' });
+      spawnTracer(gunWorld, endPoint);
       // Scare nearby pedestrians — gunfire is loud.
       world.scaredAt(gunWorld.x, gunWorld.z, 40);
-      world.hud.setAmmo(this.ammo, this.reloading);
+      this.refreshAmmo();
       if (this.ammo === 0) this.startReload();
     },
     applyHit(target, point, damage) {

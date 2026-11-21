@@ -1,6 +1,7 @@
-// Sunset Bay v6 playtest: serves game/, drives it in headless Chromium over
+// Sunset Bay v7 playtest: serves game/, drives it in headless Chromium over
 // CDP, and checks every system — load, walk, drive, all 8 missions, 4 weapons,
-// radio, garage, helicopter + roadblocks, save, FPS, console errors.
+// radio, garage, helicopter + roadblocks, save, FPS, console errors, plus the
+// v7 HUD density pack: dispatch panel, weapon slots, giver dialogue, car model.
 // Usage: node tools/playtest.mjs [--port 8941] [--shots]  (screenshots need
 // the .tools/cdp-v3.mjs driver instead; this script checks logic, not pixels)
 import { spawn } from 'node:child_process';
@@ -185,6 +186,12 @@ try {
   }
   // 1 Courier: 4 drops.
   await evalJs(`__sunsetBay.startMission(0)`);
+  // v7: the giver's dialogue box opens with the job, and the slot row
+  // shows all four weapons with live ammo.
+  const dlg0 = await evalJs(`JSON.stringify(__sunsetBay.dialogue())`);
+  check('hud v7: dialogue shows mission giver', dlg0 && JSON.parse(dlg0).name.includes('Lena Cross') && JSON.parse(dlg0).line.length > 10, `${dlg0}`);
+  const slots0 = await evalJs(`__sunsetBay.slots()`);
+  check('hud v7: weapon slots show all 4 guns', ['Pistol', 'SMG', 'Shotgun', 'Rifle'].every((w) => slots0.includes(w)), `${slots0}`);
   for (const [x, z] of [[150, -150], [-180, -150], [-150, 150], [150, 150]]) await gotoStep(x, z);
   check('mission 1 courier completes', (await evalJs(`__sunsetBay.missions().done.courier`)) === true);
   // 2 Getaway: raise heat, then lose it.
@@ -253,6 +260,16 @@ try {
   check('police: Air One joins at 4 stars', (await evalJs(`__sunsetBay.heli()`)) === true);
   check('police: roadblock appears at 3+ stars', (await evalJs(`__sunsetBay.roadblocks()`)) >= 2);
   check('police: pursuit cars spawned', (await evalJs(`__sunsetBay.cops()`)) >= 1);
+  // v7: the dispatch panel lists the live pursuit — callsign, role and
+  // distance per unit, including Air One — and the car panel names the ride.
+  const dispatch = await evalJs(`JSON.stringify(__sunsetBay.dispatch())`);
+  const units = JSON.parse(dispatch);
+  check('hud v7: dispatch lists live units', units.length >= 2, `${dispatch}`);
+  check('hud v7: dispatch units carry callsign + role + distance', units.every((u) => typeof u.callsign === 'string' && u.callsign.length > 0 && typeof u.role === 'string' && typeof u.dist === 'number' && u.dist >= 0), `${dispatch}`);
+  check('hud v7: dispatch includes Air One as SPOTLIGHT', units.some((u) => u.callsign === 'AIR-1' && u.role === 'SPOTLIGHT'), `${dispatch}`);
+  await evalJs(`__sunsetBay.teleport(60, -58)`);
+  await evalJs(`__sunsetBay.enterNearestCar()`);
+  check('hud v7: car panel names the ride', typeof (await evalJs(`__sunsetBay.carModel()`)) === 'string' && (await evalJs(`__sunsetBay.carModel()`)).length > 0, `${await evalJs(`__sunsetBay.carModel()`)}`);
   await evalJs(`__sunsetBay.clearWanted()`);
   await evalJs(`__sunsetBay.tick(0.5)`);
   check('police: heat clears, roadblocks gone', (await evalJs(`__sunsetBay.wanted()`)) === 0 && (await evalJs(`__sunsetBay.roadblocks()`)) === 0);

@@ -50,6 +50,7 @@
     z-index: 5;
   }
   #health-wrap { position: absolute; top: 14px; left: 14px; width: 240px; }
+  #health-label { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: #cfe8ff; text-shadow: 0 2px 3px #000; margin-bottom: 2px; }
   #health-bar-outer {
     height: 16px;
     background: rgba(0,0,0,.55);
@@ -63,10 +64,19 @@
     background: linear-gradient(90deg,#37d67a,#7cf2a8);
     transition: width .2s;
   }
+  #respect-bar-outer {
+    height: 7px;
+    background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.5);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  #respect-bar { height: 100%; width: 0%; background: linear-gradient(90deg,#ffd94a,#ff9d2e); transition: width .3s; }
+  #respect-next { font-size: 11px; color: #ffe9a8; text-shadow: 0 2px 3px #000; margin-top: 2px; }
   #money { margin-top: 6px; font-size: 22px; font-weight: 700; text-shadow: 0 2px 4px #000; }
   #money small { font-size: 13px; color: #9fe8b4; }
   #respect { margin-top: 2px; font-size: 14px; font-weight: 600; color: #ffd94a; text-shadow: 0 2px 3px #000; }
-  #ammo { margin-top: 4px; font-size: 15px; font-weight: 600; text-shadow: 0 2px 3px #000; }
   #radio { margin-top: 2px; font-size: 14px; font-weight: 600; color: #7cf2ff; text-shadow: 0 2px 3px #000; }
   #stars {
     position: absolute;
@@ -78,6 +88,33 @@
     color: #ffd94a;
   }
   #stars .dim { color: rgba(255,255,255,.35); }
+  #dispatch {
+    position: absolute;
+    top: 56px;
+    right: 16px;
+    width: 238px;
+    background: rgba(8,18,38,.78);
+    border: 1px solid rgba(255,220,120,.5);
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+  #dispatch h3 {
+    margin: 0 0 6px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: #ffd94a;
+  }
+  #dispatch h3 span { float: right; color: #ff7a7a; letter-spacing: 0; }
+  .dispatch-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    line-height: 1.7;
+    text-shadow: 0 1px 3px #000;
+  }
+  .dispatch-row b { color: #fff; }
+  .dispatch-role { color: #ff9d7a; font-weight: 700; }
+  .dispatch-dist { color: #bfe3ff; }
   #mission-box {
     position: absolute;
     top: 14px;
@@ -117,9 +154,65 @@
     background: rgba(10,20,35,.6);
     box-shadow: 0 2px 8px rgba(0,0,0,.5);
   }
+  #weapon-slots {
+    position: absolute;
+    left: 218px;
+    bottom: 14px;
+    display: flex;
+    gap: 6px;
+  }
+  .slot {
+    background: rgba(8,18,38,.78);
+    border: 1px solid rgba(255,255,255,.45);
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 12px;
+    text-align: center;
+    min-width: 64px;
+  }
+  .slot.current { border-color: #ffd94a; background: rgba(60,45,5,.85); }
+  .slot-key {
+    display: inline-block;
+    background: rgba(255,255,255,.2);
+    border-radius: 4px;
+    padding: 0 5px;
+    margin-right: 4px;
+    font-weight: 800;
+  }
+  .slot-name { font-weight: 700; display: block; }
+  .slot-ammo { color: #bfe3ff; }
+  #dialogue {
+    position: absolute;
+    bottom: 96px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    max-width: 560px;
+    background: rgba(8,18,38,.82);
+    border: 1px solid rgba(255,220,120,.5);
+    border-radius: 10px;
+    padding: 8px 12px;
+  }
+  #dlg-avatar {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg,#ffb347,#ff7a3c);
+    color: #3a2200;
+    font-weight: 900;
+    font-size: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #dlg-name { font-size: 13px; font-weight: 800; color: #ffd94a; }
+  #dlg-line { font-size: 14px; color: #fff; text-shadow: 0 1px 3px #000; }
   #hint {
     position: absolute;
-    bottom: 18px;
+    bottom: 64px;
     left: 50%;
     transform: translateX(-50%);
     font-size: 15px;
@@ -128,6 +221,24 @@
     border-radius: 16px;
     text-shadow: 0 1px 3px #000;
   }
+  #car-panel {
+    position: absolute;
+    bottom: 108px;
+    right: 18px;
+    width: 190px;
+    text-align: right;
+  }
+  #car-name { font-size: 15px; font-weight: 800; text-shadow: 0 2px 4px #000; color: #fff; }
+  #car-cond-outer {
+    height: 8px;
+    background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.5);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 3px;
+  }
+  #car-cond-bar { height: 100%; width: 100%; background: linear-gradient(90deg,#37d67a,#7cf2a8); }
+  #car-cond-label { font-size: 11px; letter-spacing: 1px; color: #cfe8ff; text-shadow: 0 2px 3px #000; margin-top: 2px; }
   #speedo {
     position: absolute;
     bottom: 18px;
@@ -266,13 +377,19 @@
 <div id="vignette"></div>
 <div id="hud" class="hidden">
   <div id="health-wrap">
+    <div id="health-label">HEALTH 100</div>
     <div id="health-bar-outer"><div id="health-bar"></div></div>
+    <div id="respect-bar-outer"><div id="respect-bar"></div></div>
+    <div id="respect-next"></div>
     <div id="money">$<span id="money-val">500</span> <small>Sunset Bay</small></div>
     <div id="respect">Respect: <span id="respect-val">0 · Rookie</span></div>
-    <div id="ammo">Pistol 12 / 12</div>
     <div id="radio">♪ Radio off — press Q</div>
   </div>
   <div id="stars"></div>
+  <div id="dispatch" class="hidden">
+    <h3>SBPD DISPATCH <span>● LIVE</span></h3>
+    <div id="dispatch-list"></div>
+  </div>
   <div id="mission-box">
     <div id="mission-title"></div>
     <div id="mission-step"></div>
@@ -280,8 +397,18 @@
   </div>
   <div id="toast"></div>
   <div id="crosshair"></div>
+  <div id="dialogue" class="hidden">
+    <div id="dlg-avatar">LC</div>
+    <div><div id="dlg-name"></div><div id="dlg-line"></div></div>
+  </div>
+  <div id="car-panel" class="hidden">
+    <div id="car-name"></div>
+    <div id="car-cond-outer"><div id="car-cond-bar"></div></div>
+    <div id="car-cond-label"></div>
+  </div>
   <div id="speedo" class="hidden">0<small>km/h — SPACE handbrake · SHIFT NOS</small><div id="nos-wrap" class="hidden"><div id="nos-bar"></div><small>NOS</small></div></div>
   <canvas id="minimap" width="190" height="190"></canvas>
+  <div id="weapon-slots"></div>
   <div id="hint" class="hidden"></div>
 </div>
 <div id="garage-panel" class="hidden">

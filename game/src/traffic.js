@@ -54,9 +54,9 @@ function respawnAtEdge(world, car) {
   car.speed = car.cruiseSpeed;
 }
 
-function stepTrafficCar(world, car, dt, chaseOn) {
-  if (car.dead) return;
-  // Car ahead on the same street + lane? Slow down.
+// How fast this car wants to go: full cruise speed, unless a car is right
+// ahead in the same lane, a chase is passing, or an intersection is near.
+function wantedSpeed(world, car, chaseOn) {
   let targetSpeed = car.cruiseSpeed;
   for (const other of world.cars) {
     if (other === car || other.dead) continue;
@@ -77,6 +77,12 @@ function stepTrafficCar(world, car, dt, chaseOn) {
   const along = car.vertical ? car.mesh.position.z : car.mesh.position.x;
   const nearCross = world.city.streets.some((s) => Math.abs(along - s) < 9 && Math.abs(along - s) > 2);
   if (nearCross && Math.random() < 0.5) targetSpeed = Math.min(targetSpeed, 5);
+  return targetSpeed;
+}
+
+function stepTrafficCar(world, car, dt, chaseOn) {
+  if (car.dead) return;
+  const targetSpeed = wantedSpeed(world, car, chaseOn);
   car.speed += (targetSpeed - car.speed) * Math.min(1, dt * 1.6);
   const nx = car.mesh.position.x + Math.sin(car.heading) * car.speed * dt;
   const nz = car.mesh.position.z + Math.cos(car.heading) * car.speed * dt;

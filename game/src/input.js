@@ -40,6 +40,17 @@ export function createInput(canvas) {
     },
   };
 
+  // Keyboard: track held keys, clear them all when the window loses focus
+  // so a key never sticks down after alt-tabbing away.
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space') e.preventDefault();
+    held.add(e.code);
+  });
+  window.addEventListener('keyup', (e) => held.delete(e.code));
+  window.addEventListener('blur', () => held.clear());
+
+  // Mouse: movement only counts while the pointer is locked; clicks queue
+  // one shot per press so the game can consume them exactly once.
   document.addEventListener('pointerlockchange', () => {
     state.locked = document.pointerLockElement === canvas;
   });
@@ -47,12 +58,6 @@ export function createInput(canvas) {
     e.preventDefault();
     state.locked = false;
   });
-  window.addEventListener('keydown', (e) => {
-    if (e.code === 'Space') e.preventDefault();
-    held.add(e.code);
-  });
-  window.addEventListener('keyup', (e) => held.delete(e.code));
-  window.addEventListener('blur', () => held.clear());
   document.addEventListener('mousemove', (e) => {
     if (!state.locked) return;
     deltaX += e.movementX || 0;

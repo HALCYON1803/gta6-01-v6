@@ -11,7 +11,7 @@ const TOWER_COLORS = [0x8a7f8d, 0x6f7f95, 0x9a8a6f, 0x7a6a8a, 0x5f7a8a, 0xb09a7a
 const NEON_COLORS = [0xff4fd8, 0x37e6ff, 0xffd94a, 0x7cff5e, 0xff7a3c];
 
 // A flat plane lying on the ground, for land / beach / sea / roads.
-function groundPlane(w, d, color, x, y, z) {
+function layPlane(w, d, color, x, y, z) {
   const m = new THREE.Mesh(
     new THREE.PlaneGeometry(w, d),
     new THREE.MeshLambertMaterial({ color })
@@ -27,13 +27,13 @@ export function buildCity(scene) {
   const half = CFG.worldHalf;
 
   // Land, beach strip and sea to the east.
-  const land = groundPlane(half * 2 + 60, half * 2 + 60, 0x5a6a55, 0, -0.05, 0);
+  const land = layPlane(half * 2 + 60, half * 2 + 60, 0x5a6a55, 0, -0.05, 0);
   land.receiveShadow = true;
   scene.add(land);
-  const beach = groundPlane(46, half * 2 + 60, 0xd9c08a, half + 23, -0.02, 0);
+  const beach = layPlane(46, half * 2 + 60, 0xd9c08a, half + 23, -0.02, 0);
   beach.receiveShadow = true;
   scene.add(beach);
-  const sea = groundPlane(220, half * 2 + 400, 0x2f7fb8, half + 156, -0.12, 0);
+  const sea = layPlane(220, half * 2 + 400, 0x2f7fb8, half + 156, -0.12, 0);
   scene.add(sea);
 
   // Streets: dark ribbons on the grid, pale sidewalks beside them.
@@ -84,6 +84,12 @@ export function buildCity(scene) {
   placeBuilding(PLACES.store, 20, 14, 6, 0x8a5a3a, 0xffd94a);
   placeBuilding(PLACES.gunshop, 20, 14, 6, 0x3a4a3a, 0xff4fd8);
 
+  // The pier reaching into the sea at the hideout corner.
+  const pier = new THREE.Mesh(new THREE.BoxGeometry(60, 1.2, 8), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
+  pier.position.set(half + 30, 0.4, 168);
+  pier.castShadow = true;
+  scene.add(pier);
+
   // One tower per block, skipping the blocks that hold the named places.
   const placeBlocks = [
     [PLACES.garage.x, PLACES.garage.z], [PLACES.store.x, PLACES.store.z],
@@ -95,7 +101,6 @@ export function buildCity(scene) {
       blockCenters.push([(STREET_COORDS[i] + STREET_COORDS[i + 1]) / 2, (STREET_COORDS[j] + STREET_COORDS[j + 1]) / 2]);
     }
   }
-  // One tower per block, skipping the blocks that hold the named places.
   // Rooftop neon on the tallest downtown towers, lit windows on the faces.
   function buildTower(cx, cz, rng) {
     const w = range(rng, 16, 30);
@@ -147,12 +152,6 @@ export function buildCity(scene) {
     scene.add(crown);
     colliders.push({ minX: x - 0.6, maxX: x + 0.6, minZ: z - 0.6, maxZ: z + 0.6 });
   }
-
-  // The pier reaching into the sea at the hideout corner.
-  const pier = new THREE.Mesh(new THREE.BoxGeometry(60, 1.2, 8), new THREE.MeshLambertMaterial({ color: 0x8a6a4a }));
-  pier.position.set(half + 30, 0.4, 168);
-  pier.castShadow = true;
-  scene.add(pier);
 
   return { colliders, streets: STREET_COORDS.slice() };
 }

@@ -2,7 +2,12 @@
 // chase the player, ram the player's car, and run the player down on foot.
 // At 3 stars the PD throws up roadblocks ahead of the player, and at
 // 4 stars Air One (the police helicopter, see heli.js) joins the chase.
-import { CFG } from './config.js';
+//
+// v7: every pursuit unit carries a dispatch callsign from config.js, and
+// dispatchUnits() exposes the live pursuit as data — callsign, distance
+// and tactical role — so the HUD's SBPD DISPATCH panel shows the real
+// chase, never invented text.
+import { CFG, DISPATCH_CALLSIGNS, HELI_CALLSIGN } from './config.js';
 import { createCar, damageCar } from './vehicles.js';
 
 // Wrap an angle difference into (-PI, PI] so a cop turns the short way.
@@ -10,6 +15,18 @@ function wrapAngle(dh) {
   while (dh > Math.PI) dh -= Math.PI * 2;
   while (dh < -Math.PI) dh += Math.PI * 2;
   return dh;
+}
+
+// Distance from a unit to the player, in whole metres.
+function distToPlayer(world, meshPos) {
+  return Math.round(Math.hypot(meshPos.x - world.player.pos.x, meshPos.z - world.player.pos.z));
+}
+
+// A pursuit car's tactical role, from how close it is to the player.
+function roleFor(dist) {
+  if (dist < 10) return 'RAMMING';
+  if (dist < 40) return 'CLOSING IN';
+  return 'PURSUIT';
 }
 
 export function createPolice(world) {
@@ -47,9 +64,38 @@ export function createPolice(world) {
       const car = createCar(world, { x, z, heading: Math.atan2(p.x - x, p.z - z), police: true, parked: false, seed: 900 + this.cops.length });
       car.driver = 'police';
       car.cruiseSpeed = 26;
-      const cop = { car, giveUp: false, onFoot: false, ramCooldown: 0 };
+      const cop = {
+        car,
+        giveUp: false,
+        onFoot: false,
+        ramCooldown: 0,
+        callsign: DISPATCH_CALLSIGNS[this.cops.length % DISPATCH_CALLSIGNS.length],
+      };
       this.cops.push(cop);
       return cop;
+    },
+    // The live pursuit as data for the dispatch panel: each unit's
+    // callsign, distance to the player, and tactical role. Air One
+    // reports as SPOTLIGHT while it is overhead; roadblocks report
+    // as ROADBLOCK. Sorted nearest first so the closest threat is on top.
+    dispatchUnits() {
+      const units = [];
+      for (const cop of this.cops) {
+        if (cop.car.dead || cop.giveUp) continue;
+        const d = distToPlayer(world, cop.car.mesh.position);
+        units.push({ callsign: cop.callsign, dist: d, role: roleFor(d) });
+      }
+      for (const car of this.roadblocks) {
+        if (car.dead) continue;
+        const d = distToPlayer(world, car.mesh.position);
+        units.push({ callsign: 'ROADBLOCK', dist: d, role: 'ROADBLOCK' });
+      }
+      if (world.heli && world.heli.active) {
+        const d = distToPlayer(world, world.heli.mesh.position);
+        units.push({ callsign: HELI_CALLSIGN, dist: d, role: 'SPOTLIGHT' });
+      }
+      units.sort((a, b) => a.dist - b.dist);
+      return units;
     },
     // Two patrol cars parked sideways across the road ahead of the player.
     spawnRoadblock() {
@@ -121,33 +167,40 @@ export function createPolice(world) {
         }
       }
     },
+    // A cop that gave up drives away from the player until it is far
+    // enough to despawn.
+    driveOffStep(cop, dt) {
+      if (cop.car.dead) return;
+      const dx = cop.car.mesh.position.x - world.player.pos.x;
+      const dz = cop.car.mesh.position.z - world.player.pos.z;
+      cop.car.heading = Math.atan2(dx, dz);
+      cop.car.speed = Math.min(cop.car.speed + 8 * dt, 18);
+      cop.car.mesh.position.x += Math.sin(cop.car.heading) * cop.car.speed * dt;
+      cop.car.mesh.position.z += Math.cos(cop.car.heading) * cop.car.speed * dt;
+      cop.car.mesh.rotation.y = cop.car.heading;
+    },
+    // Drop cops that drove off the map or died; their meshes go with them.
+    pruneCops() {
+      this.cops = this.cops.filter((c) => {
+        const d = Math.hypot(c.car.mesh.position.x - world.player.pos.x, c.car.mesh.position.z - world.player.pos.z);
+        if (d > 260 || c.car.dead) {
+          if (!c.car.dead) {
+            world.scene.remove(c.car.mesh);
+            const i = world.cars.indexOf(c.car);
+            if (i >= 0) world.cars.splice(i, 1);
+          }
+          return false;
+        }
+        return true;
+      });
+    },
     update(dt) {
       // Air One follows the heat level, roadblocks follow it too.
       if (world.heli) world.heli.update(dt);
       if (this.wanted === 0) {
         // Heat fades while hidden; cops that gave up drive off.
-        for (const cop of this.cops) {
-          if (cop.car.dead) continue;
-          const dx = cop.car.mesh.position.x - world.player.pos.x;
-          const dz = cop.car.mesh.position.z - world.player.pos.z;
-          cop.car.heading = Math.atan2(dx, dz);
-          cop.car.speed = Math.min(cop.car.speed + 8 * dt, 18);
-          cop.car.mesh.position.x += Math.sin(cop.car.heading) * cop.car.speed * dt;
-          cop.car.mesh.position.z += Math.cos(cop.car.heading) * cop.car.speed * dt;
-          cop.car.mesh.rotation.y = cop.car.heading;
-        }
-        this.cops = this.cops.filter((c) => {
-          const d = Math.hypot(c.car.mesh.position.x - world.player.pos.x, c.car.mesh.position.z - world.player.pos.z);
-          if (d > 260 || c.car.dead) {
-            if (!c.car.dead) {
-              world.scene.remove(c.car.mesh);
-              const i = world.cars.indexOf(c.car);
-              if (i >= 0) world.cars.splice(i, 1);
-            }
-            return false;
-          }
-          return true;
-        });
+        for (const cop of this.cops) this.driveOffStep(cop, dt);
+        this.pruneCops();
         return;
       }
       // Spawn enough pursuit cars for the star level (1 car per star, max 3).

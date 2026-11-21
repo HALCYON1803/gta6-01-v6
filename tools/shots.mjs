@@ -1,8 +1,9 @@
 // Sunset Bay screenshot capture: serves game/, loads each ?shot= preset in
 // headless Chromium over CDP, and writes the four dossier screenshots.
 // Usage: node tools/shots.mjs [--port 8931]
-// Writes screenshots/1-start.jpg, 2-street.jpg, 3-chase.jpg, 4-mission.jpg
+// Writes screenshots/1-chase.jpg, 2-street.jpg, 3-mission.jpg, 4-garage.jpg
 // and prints the console errors / failed requests seen during capture.
+// v7: the cover is the chase, not the title menu.
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -55,10 +56,10 @@ function send(method, params = {}) {
 }
 
 const SHOTS = [
-  { shot: 'start', file: '1-start.jpg' },
+  { shot: 'chase', file: '1-chase.jpg' },
   { shot: 'street', file: '2-street.jpg' },
-  { shot: 'chase', file: '3-chase.jpg' },
-  { shot: 'mission', file: '4-mission.jpg' },
+  { shot: 'mission', file: '3-mission.jpg' },
+  { shot: 'garage', file: '4-garage.jpg' },
 ];
 
 try {

@@ -46,11 +46,11 @@ export function applySave(world, data) {
       if (k in world.player.upgrades) world.player.upgrades[k] = !!data.upgrades[k];
     }
   }
+  if (typeof data.bestWanted === 'number') world.stats.bestWanted = data.bestWanted;
+  if (typeof data.carsStolen === 'number') world.stats.carsStolen = data.carsStolen;
   if (typeof data.weapon === 'string' && world.combat.selectWeapon) {
     world.combat.selectWeapon(data.weapon);
   }
-  if (typeof data.bestWanted === 'number') world.stats.bestWanted = data.bestWanted;
-  if (typeof data.carsStolen === 'number') world.stats.carsStolen = data.carsStolen;
   world.hud.setMoney(world.player.money);
   world.hud.setRespect(world.player.respect);
 }

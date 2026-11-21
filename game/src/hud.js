@@ -1,7 +1,14 @@
-// HUD: health bar, money, respect, ammo, wanted stars, radio, mission text,
-// toasts, NOS meter, and a canvas minimap with roads, the player arrow,
-// cars, cops, the helicopter, roadblocks, the garage and the objective.
-import { CFG, PLACES, respectTitle } from './config.js';
+// HUD: health + respect bars, money, wanted stars, radio, mission text,
+// toasts, NOS meter, weapon slots, the SBPD dispatch panel, the mission
+// giver's dialogue box, the car-condition panel, and a canvas minimap
+// with roads, the player arrow, cars, cops, the helicopter, roadblocks,
+// the garage and the objective.
+//
+// v7 is the density pack: the dispatch panel lists the live pursuit
+// (callsign, distance, role) from police.dispatchUnits(), the slot row
+// shows all four weapons from combat, and the dialogue box shows the
+// current job's giver from config. Every panel reads real game state.
+import { CFG, PLACES, WEAPON_ORDER, WEAPONS, RESPECT_RANKS, respectTitle, respectProgress } from './config.js';
 
 // Green while healthy, amber when hurt, red when nearly down.
 function healthGradient(hp) {
@@ -13,12 +20,17 @@ function healthGradient(hp) {
 export function createHud(world) {
   const $ = (id) => document.getElementById(id);
   const els = {
-    hud: $('hud'), healthBar: $('health-bar'), money: $('money-val'), respect: $('respect-val'),
-    ammo: $('ammo'), radio: $('radio'), stars: $('stars'), missionTitle: $('mission-title'),
-    missionStep: $('mission-step'), missionDist: $('mission-dist'), toast: $('toast'),
-    speedo: $('speedo'), nosBar: $('nos-bar'), nosWrap: $('nos-wrap'),
+    hud: $('hud'), healthBar: $('health-bar'), healthLabel: $('health-label'),
+    money: $('money-val'), respect: $('respect-val'), respectBar: $('respect-bar'),
+    respectNext: $('respect-next'), radio: $('radio'), stars: $('stars'),
+    missionTitle: $('mission-title'), missionStep: $('mission-step'), missionDist: $('mission-dist'),
+    toast: $('toast'), speedo: $('speedo'), nosBar: $('nos-bar'), nosWrap: $('nos-wrap'),
     minimap: $('minimap'), hint: $('hint'), crosshair: $('crosshair'), vignette: $('vignette'),
     menu: $('menu'), menuCard: $('menu-card'),
+    dispatch: $('dispatch'), dispatchList: $('dispatch-list'),
+    slots: $('weapon-slots'),
+    dialogue: $('dialogue'), dlgAvatar: $('dlg-avatar'), dlgName: $('dlg-name'), dlgLine: $('dlg-line'),
+    carPanel: $('car-panel'), carName: $('car-name'), carCondBar: $('car-cond-bar'), carCondLabel: $('car-cond-label'),
   };
   let toastTimer = null;
 
@@ -29,15 +41,28 @@ export function createHud(world) {
       const clamped = Math.max(0, Math.min(100, hp));
       els.healthBar.style.width = `${clamped}%`;
       els.healthBar.style.background = healthGradient(hp);
+      els.healthLabel.textContent = `HEALTH ${Math.round(clamped)}`;
       els.vignette.style.opacity = hp < 35 ? String((35 - hp) / 35 * 0.9) : '0';
     },
     setMoney(m) { els.money.textContent = String(m); },
     setRespect(r) {
       els.respect.textContent = `${r} · ${respectTitle(r)}`;
+      els.respectBar.style.width = `${Math.round(respectProgress(r) * 100)}%`;
+      const next = nextRank(r);
+      els.respectNext.textContent = next ? `Next: ${next.title} at ${next.at}` : 'Top rank — King of the Bay';
     },
+    // The ammo line is gone: the slot row below shows every weapon, its
+    // key, its name and its magazine, with the current one highlighted.
     setAmmo(n, reloading) {
-      const def = world.combat.weaponDef();
-      els.ammo.textContent = reloading ? `${def.name} — Reloading…` : `${def.name} ${n} / ${def.mag}`;
+      const current = world.combat.weapon;
+      const magOf = (id) => (world.combat.magOf ? world.combat.magOf(id) : WEAPONS[id].mag);
+      els.slots.innerHTML = WEAPON_ORDER.map((id, i) => {
+        const def = WEAPONS[id];
+        const isCurrent = id === current;
+        const ammo = isCurrent ? n : magOf(id);
+        const state = isCurrent ? (reloading ? 'RELOADING' : `${ammo} / ${def.mag}`) : `${ammo} / ${def.mag}`;
+        return `<div class="slot${isCurrent ? ' current' : ''}"><span class="slot-key">${i + 1}</span><span class="slot-name">${def.name}</span><span class="slot-ammo">${state}</span></div>`;
+      }).join('');
     },
     setRadio(text) { els.radio.textContent = `♪ ${text}`; },
     setStars(n) {
@@ -79,6 +104,45 @@ export function createHud(world) {
       } else {
         els.nosWrap.classList.add('hidden');
       }
+    },
+    // The dispatch panel: one row per live pursuit unit — callsign,
+    // tactical role, distance in metres, nearest first. Hidden when
+    // nobody is chasing the player.
+    refreshDispatch(units) {
+      if (!units || units.length === 0) {
+        els.dispatch.classList.add('hidden');
+        return;
+      }
+      els.dispatch.classList.remove('hidden');
+      els.dispatchList.innerHTML = units.map((u) =>
+        `<div class="dispatch-row"><b>${u.callsign}</b><span class="dispatch-role">${u.role}</span><span class="dispatch-dist">${u.dist}m</span></div>`
+      ).join('');
+    },
+    // The mission giver's dialogue box: portrait initials, name and role,
+    // and the giver's line for the job. It stays up until the next job
+    // replaces it or the job ends — a screenshot taken seconds later
+    // still shows it.
+    setDialogue(giver) {
+      if (!giver) { els.dialogue.classList.add('hidden'); return; }
+      els.dlgAvatar.textContent = giver.initials;
+      els.dlgName.textContent = `${giver.name} — ${giver.role}`;
+      els.dlgLine.textContent = giver.line;
+      els.dialogue.classList.remove('hidden');
+    },
+    hideDialogue() { els.dialogue.classList.add('hidden'); },
+    // The car panel: model name and condition bar, shown only while
+    // driving. The condition is the car health the game already tracks.
+    setCar(name, health) {
+      if (!name) {
+        els.carPanel.classList.add('hidden');
+        return;
+      }
+      els.carPanel.classList.remove('hidden');
+      els.carName.textContent = name;
+      const clamped = Math.max(0, Math.min(100, health));
+      els.carCondBar.style.width = `${clamped}%`;
+      els.carCondBar.style.background = healthGradient(clamped);
+      els.carCondLabel.textContent = `CONDITION ${Math.round(clamped)}%`;
     },
     drawMinimap() {
       const ctx = els.minimap.getContext('2d');
@@ -163,4 +227,12 @@ export function createHud(world) {
   api.setRespect(0);
   api.setRadio('Radio off — press Q');
   return api;
+}
+
+// The next rank above the given respect, or null at the top of the ladder.
+function nextRank(respect) {
+  for (const rung of RESPECT_RANKS) {
+    if (respect < rung.at) return rung;
+  }
+  return null;
 }

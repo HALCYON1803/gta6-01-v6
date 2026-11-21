@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { CFG } from './config.js';
 
 // Directional sun with a shadow frustum wide enough to cover the map.
-function buildSun(scene) {
+function makeSun(scene) {
   const sun = new THREE.DirectionalLight(0xffe3b3, 2.4);
   sun.position.set(120, 160, 60);
   sun.castShadow = true;
@@ -34,7 +34,7 @@ export function createRenderer(canvas) {
 
   // Warm late-afternoon sun, low in the west so the streets glow, plus a
   // soft sky fill so shadowed faces are never pitch black.
-  const sun = buildSun(scene);
+  const sun = makeSun(scene);
   scene.add(new THREE.HemisphereLight(0xbfd9ff, 0x8a7a5a, 0.9));
 
   const camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 900);

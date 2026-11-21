@@ -6,27 +6,29 @@
 // The helicopter is a visual + rules object, not a car: it never
 // collides, never takes damage, and its only job is to pin the wanted
 // level while it circles. Shooting it down is not part of this build.
+// v7: the helicopter reports its dispatch callsign (AIR-1) so the
+// dispatch panel can list it beside the ground units.
 import * as THREE from 'three';
-import { CFG } from './config.js';
+import { CFG, HELI_CALLSIGN } from './config.js';
 
 export function createHeli(world) {
   const g = new THREE.Group();
   const navy = new THREE.MeshLambertMaterial({ color: 0x1c2f4a });
   const dark = new THREE.MeshLambertMaterial({ color: 0x222222 });
 
-  // Small helper: a box part placed at (x, y, z) on the group.
-  function part(w, h, d, mat, x, y, z) {
+  // A box part bolted onto the group at (x, y, z).
+  function bolt(w, h, d, mat, x, y, z) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     m.position.set(x, y, z);
     g.add(m);
     return m;
   }
-  part(2.2, 1.4, 4.6, navy, 0, 0, 0);            // body
-  part(0.7, 0.7, 4.2, navy, 0, 0.2, -4.0);       // tail boom
-  part(1.9, 0.9, 1.4, new THREE.MeshLambertMaterial({ color: 0x9fd8ff }), 0, 0.35, 1.8); // glass
-  part(2.24, 0.3, 4.62, new THREE.MeshLambertMaterial({ color: 0xffffff }), 0, -0.1, 0); // stripe
-  const rotor = part(9.5, 0.08, 0.5, dark, 0, 1.0, 0);
-  const tailRotor = part(0.08, 2.0, 0.4, dark, 0.45, 0.3, -5.8);
+  bolt(2.2, 1.4, 4.6, navy, 0, 0, 0);            // body
+  bolt(0.7, 0.7, 4.2, navy, 0, 0.2, -4.0);       // tail boom
+  bolt(1.9, 0.9, 1.4, new THREE.MeshLambertMaterial({ color: 0x9fd8ff }), 0, 0.35, 1.8); // glass
+  bolt(2.24, 0.3, 4.62, new THREE.MeshLambertMaterial({ color: 0xffffff }), 0, -0.1, 0); // stripe
+  const rotor = bolt(9.5, 0.08, 0.5, dark, 0, 1.0, 0);
+  const tailRotor = bolt(0.08, 2.0, 0.4, dark, 0.45, 0.3, -5.8);
 
   // Searchlight: a cone of light the player can see sweeping the street.
   const beam = new THREE.Mesh(
@@ -52,10 +54,10 @@ export function createHeli(world) {
     active: false,
     leaving: false,
     hoverH: 26,
+    callsign: HELI_CALLSIGN,
     // Where the helicopter holds station relative to the player. The chase
     // screenshot preset moves it ahead of the player so it is in frame.
     follow: { x: 10, z: -8 },
-    announceTimer: 0,
     reset() {
       this.active = false;
       this.leaving = false;
@@ -104,11 +106,7 @@ export function createHeli(world) {
       beam.position.z = Math.cos(t) * 2.2;
       beam.rotation.z = Math.sin(t) * 0.12;
       beam.rotation.x = -Math.cos(t) * 0.12;
-      this.announceTimer -= dt;
     },
   };
   return state;
 }
-
-// Note: `announceTimer` is kept for future taunt lines from the crew;
-// the helicopter's behaviour today does not depend on it.

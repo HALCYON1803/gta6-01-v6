@@ -1,15 +1,17 @@
 // Cars: box-built bodies with cylinder wheels, arcade driving, damage and smoke.
 // Engine upgrades raise the top speed, NOS burns a boost meter on Shift,
 // armor cuts damage to the player's car. The gold coupe is the export target.
+// v7: every car carries a street model name (police cruisers are always the
+// SBPD Interceptor) so the HUD's car panel can name the player's ride.
 import * as THREE from 'three';
-import { CFG } from './config.js';
+import { CFG, CAR_MODELS } from './config.js';
 import { makeRng, pick } from './random.js';
 import { collideCircle } from './city.js';
 
 const PAINTS = [0xd23b3b, 0x2e6fd8, 0xe8c33a, 0x3aa655, 0xe8e8e8, 0x222222, 0xd86a1e, 0x7a4fd0, 0x4fc3d0];
 
-// A box part placed at (x, y, z) on a group, with an optional shadow.
-function boxPart(group, w, h, d, mat, x, y, z, shadow) {
+// A box part fitted onto a group at (x, y, z), with an optional shadow.
+function fitPart(group, w, h, d, mat, x, y, z, shadow) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
   if (shadow) m.castShadow = true;
@@ -21,8 +23,8 @@ export function makeCarMesh(color, isPolice) {
   const g = new THREE.Group();
   const paint = new THREE.MeshLambertMaterial({ color: isPolice ? 0x1c2f4a : color });
   const glass = new THREE.MeshLambertMaterial({ color: 0x18242e });
-  boxPart(g, 2.0, 0.62, 4.4, paint, 0, 0.55, 0, true);
-  boxPart(g, 1.8, 0.55, 2.2, glass, 0, 1.1, -0.2, true);
+  fitPart(g, 2.0, 0.62, 4.4, paint, 0, 0.55, 0, true);
+  fitPart(g, 1.8, 0.55, 2.2, glass, 0, 1.1, -0.2, true);
   const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.3, 12);
   const wheelMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
   const wheels = [];
@@ -34,8 +36,8 @@ export function makeCarMesh(color, isPolice) {
     wheels.push(w);
   }
   if (isPolice) {
-    boxPart(g, 2.02, 0.2, 4.42, new THREE.MeshLambertMaterial({ color: 0xffffff }), 0, 0.62, 0, false);
-    const bar = boxPart(g, 1.2, 0.16, 0.5, new THREE.MeshLambertMaterial({ color: 0xff2222 }), 0, 1.45, -0.2, false);
+    fitPart(g, 2.02, 0.2, 4.42, new THREE.MeshLambertMaterial({ color: 0xffffff }), 0, 0.62, 0, false);
+    const bar = fitPart(g, 1.2, 0.16, 0.5, new THREE.MeshLambertMaterial({ color: 0xff2222 }), 0, 1.45, -0.2, false);
     g.userData.lightBar = bar;
   }
   const head = new THREE.PointLight(0xfff2c0, 0, 18);
@@ -70,6 +72,7 @@ export function createCar(world, opts) {
     driver: opts.driver || null,
     steer: 0,
     color: opts.color || 0,
+    model: isPolice ? 'SBPD Interceptor' : pick(rng, CAR_MODELS),
     nosMeter: 100,
     nosBurning: false,
   };

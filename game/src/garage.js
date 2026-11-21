@@ -19,19 +19,27 @@ export function createGarage(world) {
   const panel = document.getElementById('garage-panel');
   const list = document.getElementById('garage-list');
   const closeBtn = document.getElementById('garage-close');
+
+  // One shop row: name, description, and either a BUY button or the
+  // INSTALLED tag. The button is disabled when the player cannot afford it.
+  function shopRow(u) {
+    const owned = world.player.upgrades[u.id];
+    const row = document.createElement('div');
+    row.className = 'garage-row';
+    const afford = world.player.money >= u.price;
+    row.innerHTML = `<b>${u.name}</b> — ${u.desc}<br>` +
+      (owned ? '<span class="owned">✓ INSTALLED</span>'
+        : `<button ${afford ? '' : 'disabled'}>$${u.price} — BUY</button>`);
+    return row;
+  }
+
   const api = {
     open: false,
     isOpen() { return this.open; },
     refresh() {
       list.innerHTML = '';
       for (const u of UPGRADES) {
-        const owned = world.player.upgrades[u.id];
-        const row = document.createElement('div');
-        row.className = 'garage-row';
-        const afford = world.player.money >= u.price;
-        row.innerHTML = `<b>${u.name}</b> — ${u.desc}<br>` +
-          (owned ? '<span class="owned">✓ INSTALLED</span>'
-            : `<button ${afford ? '' : 'disabled'}>$${u.price} — BUY</button>`);
+        const row = shopRow(u);
         const btn = row.querySelector('button');
         if (btn) btn.addEventListener('click', () => this.buy(u.id));
         list.appendChild(row);

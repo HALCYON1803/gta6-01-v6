@@ -22,7 +22,7 @@ const PATTERNS = {
 };
 
 // Frequency of a scale degree above a root note, at an octave multiplier.
-function degreeFreq(root, scale, degree, octave) {
+function freqOf(root, scale, degree, octave) {
   const semis = scale[((degree % scale.length) + scale.length) % scale.length] + 12 * Math.floor(degree / scale.length);
   return root * Math.pow(2, semis / 12) * octave;
 }
@@ -63,8 +63,8 @@ export function createRadio(world) {
       const pat = PATTERNS[st.id];
       const bassDeg = pat.bass[step % 16];
       const leadDeg = pat.lead[step % 16];
-      if (bassDeg >= 0) playNote(degreeFreq(st.root, scale, bassDeg, 0.5), nextTime, stepDur * 1.8, 'triangle', 0.16);
-      if (leadDeg >= 0) playNote(degreeFreq(st.root, scale, leadDeg, 2), nextTime, stepDur * 0.9, 'square', 0.045);
+      if (bassDeg >= 0) playNote(freqOf(st.root, scale, bassDeg, 0.5), nextTime, stepDur * 1.8, 'triangle', 0.16);
+      if (leadDeg >= 0) playNote(freqOf(st.root, scale, leadDeg, 2), nextTime, stepDur * 0.9, 'square', 0.045);
       if (step % 4 === 0) playNote(1800, nextTime, 0.03, 'sine', 0.02); // ticking hat
       nextTime += stepDur;
       step += 1;
